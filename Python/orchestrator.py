@@ -429,17 +429,6 @@ def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
     # Limit search to last 2000 chars to prevent processing huge responses
     search_text = raw_text[-2000:] if len(raw_text) > 2000 else raw_text
     
-    # More robust regex that handles nested structures better
-    m = re.search(r"```json\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})\s*```", search_text, flags=re.DOTALL | re.IGNORECASE)
-    if not m:
-        # Fallback to simple pattern
-        m = re.search(r"```json\s*({.+?})\s*```", search_text, flags=re.DOTALL | re.IGNORECASE)
-    
-    if not m:
-        return None
-    
-    try:
-        json_text = m.group(1)
         # Add size limit for safety (max 10KB for the JSON payload)
         if len(json_text) > 10240:
             return None
