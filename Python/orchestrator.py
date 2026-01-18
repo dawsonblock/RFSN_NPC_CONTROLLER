@@ -131,6 +131,7 @@ reward_model: Optional[RewardModel] = None
 trainer: Optional[Trainer] = None
 learning_contract: Optional[LearningContract] = None
 memory_governance: Optional[MemoryGovernance] = None
+memory_consolidator = None  # MemoryConsolidator instance
 intent_gate: Optional[IntentGate] = None
 streaming_pipeline: Optional[StreamingPipeline] = None
 structured_logger: Optional[StructuredLogger] = None
@@ -145,7 +146,7 @@ async def startup_event():
     global streaming_engine, piper_engine, xva_engine
     
     logger.info("=" * 70)
-    logger.info("RFSN ORCHESTRATOR v8.2 - STARTING UP")
+    logger.info(get_version_string() + " - STARTING UP")
     logger.info("=" * 70)
     
     # Verify models
@@ -205,12 +206,21 @@ async def startup_event():
             piper_engine = None
 
     # Initialize streaming LLM
-    model_path = Path(config_watcher.get("model_path"))
+    from model_manager import ensure_llm_model_exists
+
+    cfg_model_path = config_watcher.get("model_path")
+    resolved = ensure_llm_model_exists(cfg_model_path)
+
     if os.environ.get("SKIP_MODELS"):
         logger.info("Using MOCK LLM (SKIP_MODELS set)")
         streaming_engine = StreamingMantellaEngine(None)
     else:
-        streaming_engine = StreamingMantellaEngine(str(model_path) if model_path.exists() else None)
+        if resolved is None:
+            logger.error(f"Configured model_path not found: {cfg_model_path}")
+            logger.error("Fix: place your model file at that path, or put it in ./Models/ and update model_path in config.json accordingly.")
+            streaming_engine = StreamingMantellaEngine(None)
+        else:
+            streaming_engine = StreamingMantellaEngine(str(resolved))
     
     # Connect default TTS (Piper)
     if piper_engine and streaming_engine:
@@ -223,7 +233,7 @@ async def startup_event():
     
     # Initialize learning layer
     global policy_adapter, reward_model, trainer, learning_contract, memory_governance, intent_gate
-    global streaming_pipeline, structured_logger, metrics_collector, event_recorder, state_machine
+    global streaming_pipeline, structured_logger, metrics_collector, event_recorder, state_machine, memory_consolidator
     policy_adapter = PolicyAdapter(epsilon=0.08)
     reward_model = RewardModel()
     trainer = Trainer(learning_rate=0.05, decay_rate=0.9999)
@@ -246,7 +256,34 @@ async def startup_event():
     # In full production, we'd hook into the streaming engine's queue or a separate model.
     # For now, consolidation is manual or placeholder.
     from memory_consolidator import MemoryConsolidator
-    memory_consolidator = MemoryConsolidator(memory_governance, llm_generate_fn=None)
+
+    def _blocking_llm_generate(prompt: str, max_tokens: int = 220, temperature: float = 0.2) -> str:
+        """
+        Minimal blocking completion for consolidation.
+        Uses llama-cpp via the loaded engine when available; otherwise returns "".
+        """
+        try:
+            if not streaming_engine or not getattr(streaming_engine, "llm", None):
+                return ""
+
+            out = streaming_engine.llm(
+                prompt,
+                max_tokens=max_tokens,
+                stop=["<|eot_id|>", "<|end|>", "</s>"],
+                stream=False,
+                echo=False,
+                temperature=temperature,
+            )
+
+            if isinstance(out, dict) and out.get("choices"):
+                return (out["choices"][0].get("text") or "").strip()
+
+            return ""
+        except Exception:
+            logger.exception("Error during blocking LLM generation for consolidation")
+            return ""
+
+    memory_consolidator = MemoryConsolidator(memory_governance, llm_generate_fn=_blocking_llm_generate)
     
     # Initialize IntentGate for LLM output validation
     intent_gate = IntentGate(
@@ -383,7 +420,12 @@ async def broadcast_metrics(metrics: StreamingMetrics):
                 "dropped_sentences": metrics.dropped_sentences
             })
         except Exception:
-            active_ws.remove(ws)
+            def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
+                """
+                Expect the model to append a JSON object inside a fenced block at the END:
+        return json.loads(json_text)
+    except Exception:
+        return None
 
 
 def _cleanup_tokens(text: str) -> str:
@@ -712,6 +754,15 @@ async def stream_dialogue(request: DialogueRequest):
         )
         system_prompt += f"\n\n{action_block}"
 
+    # Require a structured tail block (keeps streaming dialogue normal, but adds a machine-verifiable footer)
+    system_prompt += (
+        "\n\nAt the end of your response, append a JSON block in a fenced ```json code block with keys: "
+        "line, tone, action. "
+        "The 'line' must match what you actually said. "
+        "The 'action' must match the required action. "
+        "Do not include any extra keys."
+    )
+
     full_prompt = f"System: {system_prompt}\n{history}\nPlayer: {request.user_input}\n{state.npc_name}:"
     
     # Snapshot configuration per request (Patch 4) prevents mid-stream tuning weirdness
@@ -722,6 +773,7 @@ async def stream_dialogue(request: DialogueRequest):
     # Stream response
     async def stream_generator():
         full_response = ""
+        raw_response = ""
         first_chunk_sent = False
         start_gen = time.time()
         
@@ -791,6 +843,11 @@ async def stream_dialogue(request: DialogueRequest):
                 
                 # Validate and clean text through IntentGate
                 validated_text = validate_llm_output(chunk.text)
+
+                # Accumulate RAW text before cleanup for JSON extraction
+                # (we need this because _cleanup_tokens below strips code blocks)
+                raw_response += (validated_text or "")
+
                 clean_text = _cleanup_tokens(validated_text)
                 
                 if clean_text:  # Only send non-empty cleaned text
@@ -801,13 +858,37 @@ async def stream_dialogue(request: DialogueRequest):
                 inc_tokens(len(chunk.text.split())) # Rough estimate
                 
                 if chunk.is_final and config_watcher.get("memory_enabled"):
-                    memory.add_turn(request.user_input, full_response)
+                    payload = _extract_tail_json_payload(raw_response)
+
+                    if payload and isinstance(payload, dict) and "line" in payload:
+                        # Authoritative stored text comes from structured payload
+                        stored_text = _cleanup_tokens(str(payload.get("line", "")))
+
+                        # Optional: sanity-check action match (record if mismatch)
+                        if selected_npc_action:
+                            expected = selected_npc_action.value
+                            got = str(payload.get("action", "")).strip()
+                            if got and got != expected and event_recorder:
+                                event_recorder.record(
+                                    EventType.SAFETY_EVENT,
+                                    {"reason": "action_mismatch_in_tail_json", "expected": expected, "got": got, "npc": npc_name}
+                                )
+                    else:
+                        # No valid structured footer -> treat as unsafe/unverifiable
+                        stored_text = full_response.strip()
+                        if event_recorder:
+                            event_recorder.record(
+                                EventType.SAFETY_EVENT,
+                                {"reason": "missing_or_invalid_tail_json", "npc": npc_name}
+                            )
+
+                    memory.add_turn(request.user_input, stored_text)
                     
                     # Record LLM generation event
                     if event_recorder:
                         event_recorder.record(
                             EventType.LLM_GENERATION,
-                            {"prompt": full_prompt, "response": full_response}
+                            {"prompt": full_prompt, "response": stored_text}
                         )
                     
                     # Also add to MemoryGovernance for provenance tracking
@@ -816,8 +897,8 @@ async def stream_dialogue(request: DialogueRequest):
                             memory_id="",
                             memory_type=MemoryType.CONVERSATION_TURN,
                             source=MemorySource.NPC_RESPONSE,
-                            content=full_response,
-                            confidence=1.0,  # Direct NPC response
+                            content=stored_text,
+                            confidence=1.0,
                             timestamp=datetime.utcnow(),
                             metadata={
                                 "npc_name": npc_name,
@@ -830,8 +911,8 @@ async def stream_dialogue(request: DialogueRequest):
                         )
                         memory_governance.add_memory(governed_memory)
                     
-                    # Process emotion on final full response
-                    emotion_info = multi_manager.process_response(npc_name, full_response)
+                    # Process emotion on authoritative stored text
+                    emotion_info = multi_manager.process_response(npc_name, stored_text)
                     logger.info(f"NPC {npc_name} emotion: {emotion_info['emotion']['primary']}")
             
             # Explicit End-of-Stream Flush (Patch v8.9)

@@ -1,0 +1,4 @@
+# macOS-only MLX extras (do NOT install in Docker/Linux)
+mlx>=0.0.10
+mlx-audio-plus
+mlx_lm
