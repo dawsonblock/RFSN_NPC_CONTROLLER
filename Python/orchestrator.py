@@ -864,7 +864,8 @@ async def stream_dialogue(request: DialogueRequest):
                 # Validate and clean text through IntentGate
                 validated_text = validate_llm_output(chunk.text)
 
-                # Keep RAW text for structured tail parsing (cleanup strips code blocks)
+                # Accumulate RAW text before cleanup for JSON extraction
+                # (we need this because _cleanup_tokens below strips code blocks)
                 raw_response += (validated_text or "")
 
                 clean_text = _cleanup_tokens(validated_text)
