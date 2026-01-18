@@ -216,7 +216,7 @@ async def startup_event():
     else:
         if resolved is None:
             logger.error(f"Configured model_path not found: {cfg_model_path}")
-            logger.error("Fix: place your GGUF at that path, or put it in ./Models/ and set model_path accordingly.")
+            logger.error("Fix: place your model file at that path, or put it in ./Models/ and update model_path in config.json accordingly.")
             streaming_engine = StreamingMantellaEngine(None)
         else:
             streaming_engine = StreamingMantellaEngine(str(resolved))
