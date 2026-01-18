@@ -421,3 +421,26 @@ if __name__ == "__main__":
         print("\nSetup complete:")
         for name, path in paths.items():
             print(f"  {name}: {path}")
+
+
+def ensure_llm_model_exists(target_path: str) -> Optional[Path]:
+    """
+    Ensure the configured LLM model exists locally.
+    We do NOT guess URLs for arbitrary GGUFs.
+    Returns a Path if found, else None.
+    """
+    try:
+        p = Path(target_path)
+    except Exception:
+        return None
+
+    if p.exists():
+        return p
+
+    # If config points outside, also try ./Models/<filename>
+    alt = Path("Models") / p.name
+    if alt.exists():
+        return alt
+
+    return None
+
