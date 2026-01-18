@@ -1,0 +1,3 @@
+{"t": "user", "ts": "2026-01-17T20:46:01.514153", "data": {"text": "fuck u"}}
+{"t": "meta", "ts": "2026-01-17T20:46:03.589436", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "EVIDENCE_CITE"}}
+{"t": "assistant", "ts": "2026-01-17T20:46:03.595617", "data": {"text": "I understand your frustration, but I'm just doing my job.I'll make sure to be more attentive in the future."}}

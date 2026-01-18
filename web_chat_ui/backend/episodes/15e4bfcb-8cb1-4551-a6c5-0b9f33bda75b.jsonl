@@ -1,0 +1,3 @@
+{"t": "user", "ts": "2026-01-17T20:49:43.945894", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-17T20:49:45.850707", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T20:49:45.978524", "data": {"text": "(nodding politely) Hello again.You have a fine sense of style.Your outfit really stands out."}}

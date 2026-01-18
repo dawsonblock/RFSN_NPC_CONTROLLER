@@ -1,0 +1,12 @@
+{"t": "user", "ts": "2026-01-18T00:05:23.013019", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-18T00:05:27.618317", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-18T00:05:27.909105", "data": {"text": "Hello there. I'm here to provide assistance and answer any questions you might have about our services or The Velvet Room. Is there something specific you'd like to know or discuss at this time."}}
+{"t": "user", "ts": "2026-01-18T00:06:04.745010", "data": {"text": "wherr is the bathroom"}}
+{"t": "meta", "ts": "2026-01-18T00:06:07.739768", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-18T00:06:08.957318", "data": {"text": "The bathroom is located down the hall, to your left as you exit this room. It's the third door on your left. Let me know if you need any further assistance."}}
+{"t": "user", "ts": "2026-01-18T02:04:49.118747", "data": {"text": "hi"}}
+{"t": "meta", "ts": "2026-01-18T02:04:54.005062", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-18T02:04:56.240534", "data": {"text": "Hello there. I'm here to provide assistance and answer any questions you might have about our services or The Velvet Room. Is there something specific you'd like to know or discuss at this time."}}
+{"t": "user", "ts": "2026-01-18T02:05:28.090845", "data": {"text": "gho"}}
+{"t": "meta", "ts": "2026-01-18T02:05:32.419301", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-18T02:05:33.835502", "data": {"text": "I'm sorry, I didn't quite catch that. Could you please repeat or clarify your question. I'm here to help in any way I can."}}

@@ -1,0 +1,9 @@
+{"t": "user", "ts": "2026-01-17T20:57:55.400358", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-17T20:58:01.744499", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T20:58:01.883629", "data": {"text": "(smiling politely) Hello!Welcome to this establishment.I'm here to ensure your safety and comfort.Is there something you'd like to know or discuss?"}}
+{"t": "user", "ts": "2026-01-17T21:00:52.451726", "data": {"text": "fuck u"}}
+{"t": "meta", "ts": "2026-01-17T21:00:56.663433", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:00:56.674057", "data": {"text": "I'm sorry if I've given you any reason to feel upset.I'll make sure to be more mindful of my tone in the future.Is there a particular issue you'd like to address?"}}
+{"t": "user", "ts": "2026-01-17T21:01:40.208740", "data": {"text": "eat shit"}}
+{"t": "meta", "ts": "2026-01-17T21:01:44.888429", "data": {"player_signal": "question", "bandit_key": "anger|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:01:45.054405", "data": {"text": "I'm here to maintain a respectful environment for all guests.I won't tolerate abusive language or behavior.If you have any concerns, please express them in a civil manner."}}

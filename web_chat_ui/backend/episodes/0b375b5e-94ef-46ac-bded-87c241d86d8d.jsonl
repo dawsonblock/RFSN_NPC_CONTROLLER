@@ -1,0 +1,6 @@
+{"t": "user", "ts": "2026-01-17T23:57:39.680256", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-17T23:57:44.427849", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "WARM_SUPPORTIVE"}}
+{"t": "assistant", "ts": "2026-01-17T23:57:45.072916", "data": {"text": "Hello there. I hope you're having a good day. Is there something specific I can help you with regarding our services or The Velvet Room."}}
+{"t": "user", "ts": "2026-01-17T23:58:15.666847", "data": {"text": "hi"}}
+{"t": "meta", "ts": "2026-01-17T23:58:18.772630", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "WARM_SUPPORTIVE"}}
+{"t": "assistant", "ts": "2026-01-17T23:58:20.702129", "data": {"text": "Hi there. I'm here to help answer any questions you might have about our services or The Velvet Room. Is there something specific you'd like to know or discuss."}}

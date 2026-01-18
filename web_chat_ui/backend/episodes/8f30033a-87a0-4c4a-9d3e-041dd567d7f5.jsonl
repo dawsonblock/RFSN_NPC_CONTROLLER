@@ -1,0 +1,6 @@
+{"t": "user", "ts": "2026-01-17T21:34:56.883554", "data": {"text": "hell fuckrr"}}
+{"t": "meta", "ts": "2026-01-17T21:34:59.114349", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:34:59.959056", "data": {"text": "I'm sorry, I didn't quite catch that. Could you please repeat or clarify your question. I'm here to help answer any inquiries you might have."}}
+{"t": "user", "ts": "2026-01-17T21:37:33.779627", "data": {"text": "hello, how are u"}}
+{"t": "meta", "ts": "2026-01-17T21:37:37.358707", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "EVIDENCE_CITE"}}
+{"t": "assistant", "ts": "2026-01-17T21:37:38.958796", "data": {"text": "Hello. I'm doing well, thank you for asking. How can I help make your visit to The Velvet Room a pleasant one. Is there something specific you'd like to know or discuss."}}

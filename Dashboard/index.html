@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFSN Orchestrator v8.6 - Premium</title>
+    <style>
+        :root {
+            --bg-dark: #050508;
+            --glass-bg: rgba(20, 20, 30, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.03);
+
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+
+            --accent-primary: #6366f1;
+            /* Indigo */
+            --accent-success: #10b981;
+            /* Emerald */
+            --accent-warning: #f59e0b;
+            /* Amber */
+            --accent-danger: #ef4444;
+            /* Red */
+
+            --gradient-glow: radial-gradient(circle at 50% -20%, #4f46e533, transparent 70%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+            background-image: var(--gradient-glow);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Background Loop */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 80% 20%, #6366f111, transparent 40%),
+                radial-gradient(circle at 20% 80%, #ec489911, transparent 40%);
+            z-index: -1;
+            animation: float 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes float {
+            0% {
+                transform: scale(1);
+            }
+
+            100% {
+                transform: scale(1.1);
+            }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 1rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 99px;
+            font-size: 0.875rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.connected {
+            background: var(--accent-success);
+            box-shadow: 0 0 10px var(--accent-success);
+        }
+
+        .status-dot.disconnected {
+            background: var(--accent-danger);
+        }
+
+        /* Glass Cards */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease, border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .card-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-unit {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .card-sub {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* SVG Chart */
+        .chart-wrapper {
+            width: 100%;
+            height: 60px;
+            margin-top: 1rem;
+            position: relative;
+        }
+
+        .sparkline {
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke: var(--accent-primary);
+            stroke-width: 2;
+            vector-effect: non-scaling-stroke;
+        }
+
+        /* Controls */
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: var(--glass-border);
+            border-radius: 2px;
+            outline: none;
+            margin: 1rem 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-primary);
+        }
+
+        .btn {
+            background: var(--glass-highlight);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            font-weight: 500;
+            width: 100%;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            border-color: transparent;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #4f46e5;
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Logs */
+        .log-panel {
+            max-height: 250px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-line {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            display: flex;
+            gap: 10px;
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+
+        .log-info {
+            color: var(--text-primary);
+        }
+
+        .log-success {
+            color: var(--accent-success);
+        }
+
+        .log-error {
+            color: var(--accent-danger);
+        }
+
+        /* Toasts */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            color: #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 300px;
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--accent-success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--accent-danger);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+        }
+
+        footer {
+            margin-top: 4rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>RFSN Orchestrator <span style="font-size:0.5em; opacity:0.5; font-weight:400">v8.6</span></h1>
+            <div class="status-badge">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Main Metrics -->
+        <div class="grid">
+            <!-- Latency Card -->
+            <div class="card" style="grid-column: span 2">
+                <div class="card-label">Latency (First Sentence)</div>
+                <div class="card-value">
+                    <span id="firstSentenceVal">--</span>
+                    <span class="card-unit">ms</span>
+                </div>
+                <div class="card-sub" id="firstSentenceDelta">Target: < 1500ms</div>
+                        <div class="chart-wrapper">
+                            <svg id="latencySparkline" class="sparkline" viewBox="0 0 100 20"
+                                preserveAspectRatio="none">
+                                <!-- Path injected by JS -->
+                            </svg>
+                        </div>
+                </div>
+
+                <!-- Queue Card -->
+                <div class="card">
+                    <div class="card-label">TTS Queue</div>
+                    <div class="card-value">
+                        <span id="queueVal">0</span>
+                        <span class="card-unit">/ 3</span>
+                    </div>
+                    <div class="card-sub" id="droppedVal">0 dropped</div>
+                </div>
+            </div>
+
+            <!-- Controls & Logs -->
+            <div class="grid">
+                <!-- Controls -->
+                <div class="card">
+                    <div class="card-label">Runtime Tuning</div>
+
+                    <div style="margin-top: 1.5rem">
+                        <div class="control-row">
+                            <span class="card-sub">Temperature</span>
+                            <span class="card-sub" id="tempDisplay">0.7</span>
+                        </div>
+                        <input type="range" id="tempSlider" min="0.1" max="2.0" step="0.1" value="0.7"
+                            oninput="document.getElementById('tempDisplay').innerText = this.value">
+
+                        <button class="btn btn-primary" onclick="applyTuning(this)">Apply Changes</button>
+                    </div>
+
+                    <div style="margin-top: 2rem; border-top: 1px solid var(--glass-border); padding-top: 1.5rem">
+                        <div class="card-label">Dangerous Actions</div>
+                        <div style="display:flex; gap:10px; margin-top:10px">
+                            <button class="btn btn-danger" onclick="safeReset()">Safe Reset NPC</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="card log-panel" id="logPanel">
+                    <!-- Logs injected here -->
+                </div>
+            </div>
+
+            <footer>
+                Running on FAST-RFSN · Powered by Mantella & Piper
+            </footer>
+        </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <script>
+            // --- State ---
+            const history = new Array(50).fill(0);
+            let ws = null;
+            let retryCount = 0;
+
+            // --- UI Logic ---
+            function showToast(msg, type = 'success') {
+                const container = document.getElementById('toastContainer');
+                const el = document.createElement('div');
+                el.className = `toast ${type}`;
+                el.innerText = msg;
+                container.appendChild(el);
+
+                // Remove after 3s
+                setTimeout(() => {
+                    el.style.animation = 'fadeOut 0.3s forwards';
+                    setTimeout(() => el.remove(), 300);
+                }, 3000);
+            }
+
+            function log(msg, type = 'info') {
+                const panel = document.getElementById('logPanel');
+                const row = document.createElement('div');
+                row.className = 'log-line';
+                row.innerHTML = `
+                <span class="log-time">${new Date().toLocaleTimeString()}</span>
+                <span class="log-${type}">${msg}</span>
+            `;
+                panel.insertBefore(row, panel.firstChild);
+                if (panel.children.length > 50) panel.lastChild.remove();
+            }
+
+            function updateSparkline() {
+                const svg = document.getElementById('latencySparkline');
+                const max = Math.max(...history, 1000);
+
+                // Generate path string: M 0 y0 L 1 y1 ...
+                let d = `M 0 ${20 - (history[0] / max) * 20}`;
+                for (let i = 1; i < history.length; i++) {
+                    const x = (i / (history.length - 1)) * 100;
+                    const y = 20 - (history[i] / max) * 20;
+                    d += ` L ${x} ${y}`;
+                }
+
+                svg.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="0.5" />`;
+            }
+
+            // --- WebSocket ---
+            function connect() {
+                ws = new WebSocket(`ws://${location.host}/ws/metrics`);
+
+                ws.onopen = () => {
+                    document.getElementById('statusDot').classList.add('connected');
+                    document.getElementById('statusText').innerText = "Live";
+                    log("Connected to Orchestrator", "success");
+                    retryCount = 0;
+                };
+
+                ws.onclose = () => {
+                    document.getElementById('statusDot').classList.remove('connected');
+                    document.getElementById('statusText').innerText = "Reconnecting...";
+                    log("Disconnected", "error");
+                    setTimeout(connect, Math.min(1000 * Math.pow(2, retryCount++), 10000));
+                };
+
+                ws.onmessage = (e) => {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'metrics') {
+                        // Update Values
+                        document.getElementById('firstSentenceVal').innerText = data.first_sentence_ms?.toFixed(0) || '--';
+                        document.getElementById('queueVal').innerText = data.tts_queue_size;
+                        document.getElementById('droppedVal').innerText = `${data.dropped_sentences} dropped`;
+
+                        // Update Chart
+                        if (data.first_sentence_ms) {
+                            history.shift();
+                            history.push(data.first_sentence_ms);
+                            updateSparkline();
+                        }
+                    }
+                };
+            }
+
+            // --- Actions ---
+            async function applyTuning(btn) {
+                const temp = parseFloat(document.getElementById('tempSlider').value);
+                const originalText = btn.innerText;
+
+                btn.disabled = true;
+                btn.innerText = "Applying...";
+
+                try {
+                    const res = await fetch('/api/tune-performance', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-API-Key': 'admin' },
+                        body: JSON.stringify({ temperature: temp })
+                    });
+
+                    if (res.ok) {
+                        showToast(`Temperature set to ${temp}`, 'success');
+                        log(`Tuning applied: Temp=${temp}`, 'success');
+                    } else {
+                        throw new Error(res.statusText);
+                    }
+                } catch (e) {
+                    showToast(`Failed: ${e.message}`, 'error');
+                    log(`Tuning error: ${e.message}`, 'error');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            }
+
+            async function safeReset() {
+                const npc = prompt("NPC Name to reset:", "TestNPC");
+                if (!npc) return;
+
+                try {
+                    const res = await fetch(`/api/memory/${npc}/safe_reset`, {
+                        method: 'POST',
+                        headers: { 'X-API-Key': 'admin' }
+                    });
+                    if (res.ok) {
+                        showToast(`Reset ${npc} successful`, 'success');
+                        log(`Reset ${npc}`, 'success');
+                    } else throw new Error("API Failure");
+                } catch (e) {
+                    showToast("Reset Failed", 'error');
+                }
+            }
+
+            // Init
+            connect();
+            updateSparkline();
+        </script>
+</body>
+
+</html>

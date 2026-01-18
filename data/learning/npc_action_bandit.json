@@ -1,0 +1,207 @@
+{
+  "arms": {
+    "anger|stranger|neutral|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.6849429451582145,
+        "beta": 1.3150570548417855,
+        "n": 1.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      }
+    },
+    "grumpy|stranger|neutral|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.66499550161941,
+        "beta": 1.33500449838059,
+        "n": 1.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      }
+    },
+    "neutral|associate|very_pos|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 2.0,
+        "beta": 1.0,
+        "n": 1.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      }
+    },
+    "neutral|stranger|neutral|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 9.387422843404735,
+        "beta": 3.6125771565952647,
+        "n": 11.0
+      },
+      "apologize": {
+        "alpha": 8.097136492671929,
+        "beta": 3.902863507328072,
+        "n": 10.0
+      },
+      "compliment": {
+        "alpha": 7.387422843404735,
+        "beta": 3.6125771565952647,
+        "n": 9.0
+      },
+      "greet": {
+        "alpha": 2.419427298534386,
+        "beta": 1.5805727014656141,
+        "n": 2.0
+      },
+      "request": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      }
+    },
+    "neutral|stranger|neutral|request|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.709713649267193,
+        "beta": 1.290286350732807,
+        "n": 1.0
+      }
+    },
+    "neutral|stranger|pos|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.724442516811659,
+        "beta": 1.275557483188341,
+        "n": 1.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.724442516811659,
+        "beta": 1.275557483188341,
+        "n": 1.0
+      }
+    },
+    "neutral|stranger|very_pos|compliment|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "request": {
+        "alpha": 2.0,
+        "beta": 1.0,
+        "n": 1.0
+      }
+    },
+    "neutral|stranger|very_pos|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "compliment": {
+        "alpha": 2.0,
+        "beta": 1.0,
+        "n": 1.0
+      },
+      "greet": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      }
+    },
+    "neutral|student|very_pos|question|no_combat|no_quest": {
+      "agree": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "apologize": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "compliment": {
+        "alpha": 1.0,
+        "beta": 1.0,
+        "n": 0.0
+      },
+      "greet": {
+        "alpha": 2.0,
+        "beta": 1.0,
+        "n": 1.0
+      }
+    }
+  }
+}

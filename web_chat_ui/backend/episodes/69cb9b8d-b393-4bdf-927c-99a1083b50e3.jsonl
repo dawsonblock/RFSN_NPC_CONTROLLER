@@ -1,0 +1,12 @@
+{"t": "user", "ts": "2026-01-17T21:03:25.266993", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-17T21:03:29.471355", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:03:29.586137", "data": {"text": "(smiling politely) Hello!It's nice to see you again.Is there something I can help you with today?"}}
+{"t": "user", "ts": "2026-01-17T21:04:09.517060", "data": {"text": "u ugly"}}
+{"t": "meta", "ts": "2026-01-17T21:04:12.763602", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:04:12.765505", "data": {"text": "I'm sorry if you feel that way about my appearance.I'll continue to focus on providing excellent service for all guests.Is there a specific concern you'd like to address?"}}
+{"t": "user", "ts": "2026-01-17T21:06:47.157621", "data": {"text": "where are we"}}
+{"t": "meta", "ts": "2026-01-17T21:06:51.295138", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "compliment", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:06:51.300310", "data": {"text": "We're at the exclusive nightclub, The Velvet Room.I'm here to ensure your safety and enjoyment during your visit.Is there a particular area or event you're interested in?"}}
+{"t": "user", "ts": "2026-01-17T21:07:24.566992", "data": {"text": "stripclub"}}
+{"t": "meta", "ts": "2026-01-17T21:07:29.237127", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "agree", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T21:07:29.344857", "data": {"text": "I'm afraid The Velvet Room is not a strip club.We pride ourselves on offering a sophisticated and elegant atmosphere for our guests.If you have any other questions or concerns, please don't hesitate to ask."}}

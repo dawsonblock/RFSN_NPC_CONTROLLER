@@ -1,0 +1,3 @@
+{"t": "user", "ts": "2026-01-17T20:43:30.809824", "data": {"text": "hello"}}
+{"t": "meta", "ts": "2026-01-17T20:43:32.468537", "data": {"player_signal": "question", "bandit_key": "neutral|stranger|neutral|question|no_combat|no_quest", "npc_action": "apologize", "action_mode": "TERSE_DIRECT"}}
+{"t": "assistant", "ts": "2026-01-17T20:43:32.897471", "data": {"text": "(smiling politely) Hello there, I'm sorry for any inconvenience earlier. It was an oversight on my part. Please accept my apologies."}}

@@ -1,0 +1,31 @@
+{
+  "model_path": "../Models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+  "piper_enabled": true,
+  "piper_model": "en_US-ryan-low",
+  "memory_enabled": true,
+  "max_queue_size": 10,
+  "temperature": 0.1,
+  "max_tokens": 150,
+  "context_limit": 4,
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "log_level": "info",
+    "tts": {
+      "backend": "piper",
+      "piper_model": "en_US-ryan-low.onnx",
+      "mlx_model": "Models/Chatterbox-Turbo-TTS-8bit",
+      "speed": 1.0,
+      "sample_rate": 24000
+    },
+    "performance": {
+      "text_chunk_size": 20,
+      "audio_queue_size": 10
+    }
+  },
+  "performance": {
+    "target_latency_ms": 1500,
+    "backpressure_queue_size": 10,
+    "tts_speed": 1.0
+  }
+}
