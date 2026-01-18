@@ -426,11 +426,24 @@ def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
       ```
     We parse from the raw (pre-cleanup) stream because _cleanup_tokens strips code blocks.
     """
-    m = re.search(r"```json\s*({.*?})\s*```", raw_text, flags=re.DOTALL | re.IGNORECASE)
+    # Limit search to last 2000 chars to prevent processing huge responses
+    search_text = raw_text[-2000:] if len(raw_text) > 2000 else raw_text
+    
+    # More robust regex that handles nested structures better
+    m = re.search(r"```json\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})\s*```", search_text, flags=re.DOTALL | re.IGNORECASE)
+    if not m:
+        # Fallback to simple pattern
+        m = re.search(r"```json\s*({.+?})\s*```", search_text, flags=re.DOTALL | re.IGNORECASE)
+    
     if not m:
         return None
+    
     try:
-        return json.loads(m.group(1))
+        json_text = m.group(1)
+        # Add size limit for safety (max 10KB for the JSON payload)
+        if len(json_text) > 10240:
+            return None
+        return json.loads(json_text)
     except Exception:
         return None
 
