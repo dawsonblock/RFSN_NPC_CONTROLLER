@@ -265,6 +265,7 @@ async def startup_event():
         try:
             if not streaming_engine or not getattr(streaming_engine, "llm", None):
                 return ""
+
             out = streaming_engine.llm(
                 prompt,
                 max_tokens=max_tokens,
@@ -273,11 +274,13 @@ async def startup_event():
                 echo=False,
                 temperature=temperature,
             )
+
             if isinstance(out, dict) and out.get("choices"):
                 return (out["choices"][0].get("text") or "").strip()
-            except Exception:
-                logger.exception("Error during blocking LLM generation for consolidation")
-                return ""
+
+            return ""
+        except Exception:
+            logger.exception("Error during blocking LLM generation for consolidation")
             return ""
 
     memory_consolidator = MemoryConsolidator(memory_governance, llm_generate_fn=_blocking_llm_generate)
