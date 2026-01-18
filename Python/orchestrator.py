@@ -131,6 +131,7 @@ reward_model: Optional[RewardModel] = None
 trainer: Optional[Trainer] = None
 learning_contract: Optional[LearningContract] = None
 memory_governance: Optional[MemoryGovernance] = None
+memory_consolidator = None  # MemoryConsolidator instance
 intent_gate: Optional[IntentGate] = None
 streaming_pipeline: Optional[StreamingPipeline] = None
 structured_logger: Optional[StructuredLogger] = None
@@ -232,7 +233,7 @@ async def startup_event():
     
     # Initialize learning layer
     global policy_adapter, reward_model, trainer, learning_contract, memory_governance, intent_gate
-    global streaming_pipeline, structured_logger, metrics_collector, event_recorder, state_machine
+    global streaming_pipeline, structured_logger, metrics_collector, event_recorder, state_machine, memory_consolidator
     policy_adapter = PolicyAdapter(epsilon=0.08)
     reward_model = RewardModel()
     trainer = Trainer(learning_rate=0.05, decay_rate=0.9999)

@@ -36,6 +36,7 @@ class EventType(Enum):
     LEARNING_UPDATE = "learning_update"
     ERROR = "error"
     STATE_TRANSITION = "state_transition"
+    SAFETY_EVENT = "safety_event"
 
 
 @dataclass
