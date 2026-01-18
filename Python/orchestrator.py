@@ -429,10 +429,36 @@ def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
     """
     # Limit search to last 2000 chars to prevent processing huge responses
     search_text = raw_text[-2000:] if len(raw_text) > 2000 else raw_text
-    
-        # Add size limit for safety (max 10KB for the JSON payload)
-        if len(json_text) > 10240:
-            return None
+
+    # Find the start of the last JSON object by locating the last '{'
+    start = search_text.rfind("{")
+    if start == -1:
+        return None
+
+    # Walk forward from 'start' to find the matching closing '}' using a brace counter
+    brace_count = 0
+    end: Optional[int] = None
+    for idx in range(start, len(search_text)):
+        ch = search_text[idx]
+        if ch == "{":
+            brace_count += 1
+        elif ch == "}":
+            brace_count -= 1
+            if brace_count == 0:
+                end = idx + 1
+                break
+
+    # If we never balanced all braces, bail out
+    if end is None or brace_count != 0:
+        return None
+
+    json_text = search_text[start:end].strip()
+
+    # Add size limit for safety (max 10KB for the JSON payload)
+    if len(json_text) > 10240:
+        return None
+
+    try:
         return json.loads(json_text)
     except Exception:
         return None
