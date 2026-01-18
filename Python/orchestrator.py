@@ -275,7 +275,8 @@ async def startup_event():
             if isinstance(out, dict) and out.get("choices"):
                 return (out["choices"][0].get("text") or "").strip()
             return ""
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error during blocking LLM generation for consolidation: {e}", exc_info=True)
             return ""
 
     memory_consolidator = MemoryConsolidator(memory_governance, llm_generate_fn=_blocking_llm_generate)
