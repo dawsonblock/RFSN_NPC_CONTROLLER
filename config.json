@@ -1,6 +1,6 @@
 {
   "model_path": "../Models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-  "piper_enabled": true,
+  "piper_enabled": false,
   "piper_model": "en_US-ryan-low",
   "memory_enabled": true,
   "max_queue_size": 10,
@@ -12,7 +12,7 @@
     "port": 8000,
     "log_level": "info",
     "tts": {
-      "backend": "piper",
+      "backend": "mlx",
       "piper_model": "en_US-ryan-low.onnx",
       "mlx_model": "Models/Chatterbox-Turbo-TTS-8bit",
       "speed": 1.0,

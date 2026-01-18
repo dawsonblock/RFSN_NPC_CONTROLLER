@@ -21,6 +21,13 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from learning.learning_contract import LearningContract
+from learning.npc_action_bandit import NPCActionBandit, NPCAction
+from action_scorer import ActionScorer
+from world_model import WorldModel
+from reward_shaping import RewardAccumulator
+from learning.reward_model import RewardModel
+from learning.trainer import Trainer
 
 # Import core modules
 from streaming_engine import StreamingMantellaEngine, StreamingMetrics, RFSNState
@@ -420,12 +427,27 @@ async def broadcast_metrics(metrics: StreamingMetrics):
                 "dropped_sentences": metrics.dropped_sentences
             })
         except Exception:
-            def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
-                """
-                Expect the model to append a JSON object inside a fenced block at the END:
-        return json.loads(json_text)
+            pass
+
+
+def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
+    """
+    Expect the model to append a JSON object inside a fenced block at the END:
+    ```json
+    { ... }
+    ```
+    """
+    import json
+    import re
+    try:
+        match = re.search(r'```json\s*(\{.*?\})\s*```', raw_text, re.DOTALL | re.IGNORECASE)
+        if match:
+            json_text = match.group(1)
+            return json.loads(json_text)
+        return None
     except Exception:
         return None
+
 
 
 def _cleanup_tokens(text: str) -> str:
@@ -493,6 +515,9 @@ async def stream_dialogue(request: DialogueRequest):
     """
     start_time = time.time()
     inc_requests()
+    
+    # Micro-reward accumulator for this turn
+    reward_accumulator = RewardAccumulator(window=10)
     
     if not streaming_engine:
         inc_errors()
@@ -833,6 +858,14 @@ async def stream_dialogue(request: DialogueRequest):
                     latency = (time.time() - start_gen)
                     observe_first_token(latency)
                     logger.info(f"First token: {latency*1000:.0f}ms")
+                    
+                    # Micro-reward: Engaging start (fast response)
+                    if latency < 2.0:
+                        reward_accumulator.add(0.05, "fast_response")
+
+                # Micro-reward: Long, engaging response
+                if len(full_response) > 50 and len(full_response) < 60: # trigger once
+                    reward_accumulator.add(0.05, "engaging_length")
                 
                 # Record user input event
                 if event_recorder:
@@ -914,6 +947,10 @@ async def stream_dialogue(request: DialogueRequest):
                     # Process emotion on authoritative stored text
                     emotion_info = multi_manager.process_response(npc_name, stored_text)
                     logger.info(f"NPC {npc_name} emotion: {emotion_info['emotion']['primary']}")
+                    
+                    # Micro-reward: Positive emotion
+                    if emotion_info['emotion']['primary'] in ("joy", "trust", "anticipation"):
+                        reward_accumulator.add(0.10, "positive_emotion")
             
             # Explicit End-of-Stream Flush (Patch v8.9)
             if streaming_engine and streaming_engine.voice:
@@ -1064,23 +1101,21 @@ async def stream_dialogue(request: DialogueRequest):
                     def sigmoid(x: float) -> float:
                         return 1.0 / (1.0 + math.exp(-x))
                     
-                    bandit_reward = sigmoid(selected_action_score.total_score)
+                    # Base signal from action scorer
+                    base_reward = sigmoid(selected_action_score.total_score)
                     
-                    # Positive evidence: conversation continued
-                    conversation_continued = True  # We're processing another turn
-                    if conversation_continued:
-                        bandit_reward += 0.15
+                    # Add micro-rewards
+                    shaped_reward = base_reward + reward_accumulator.emit()
                     
-                    # Negative evidence: output was blocked or empty
-                    output_blocked = not full_response or len(full_response.strip()) == 0
+                    # Negative evidence: output was blocked
                     if output_blocked:
-                        bandit_reward -= 0.4
-                    
+                        shaped_reward -= 0.4
+                        
                     # Clamp to [0, 1]
-                    bandit_reward = max(0.0, min(1.0, bandit_reward))
+                    final_reward = max(0.0, min(1.0, shaped_reward))
                     
                     # Update bandit
-                    npc_action_bandit.update(bandit_key, selected_npc_action, bandit_reward)
+                    npc_action_bandit.update(bandit_key, selected_npc_action, final_reward)
                     
                     # Save periodically (every update for now)
                     npc_action_bandit.save()
@@ -1191,7 +1226,7 @@ async def health_check():
 
 @app.get("/api/status")
 async def get_status():
-    """System health check"""
+    # System health check
     return {
         "status": "healthy",
         "version": "8.2",
@@ -1208,7 +1243,7 @@ async def get_status():
 
 @app.post("/api/tune-performance", dependencies=[Depends(require_auth)])
 async def tune_performance(settings: PerformanceSettings):
-    """Adjust performance settings at runtime"""
+    # Adjust performance settings at runtime
     # Hot config handles the persistence and reload
     import json
     

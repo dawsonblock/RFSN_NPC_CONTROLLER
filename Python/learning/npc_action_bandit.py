@@ -19,45 +19,52 @@ class BanditKey:
     """
     Coarse bucket so learning generalizes without exploding state space.
     """
-    mood: str
-    relationship: str
-    affinity_band: str
-    player_signal: str
-    combat: bool
-    quest: bool
-
-    @staticmethod
-    def _affinity_band(a: float) -> str:
-        if a <= -0.6:
-            return "very_neg"
-        if a <= -0.2:
-            return "neg"
-        if a < 0.2:
-            return "neutral"
-        if a < 0.6:
-            return "pos"
-        return "very_pos"
+    combat_bucket: str
+    relationship_bucket: str
+    threat_bucket: str
 
     @classmethod
     def from_state(cls, s: StateSnapshot, sig: PlayerSignal) -> "BanditKey":
+        # Discretize into coarse buckets to reduce state explosion
+        
+        # Combat bucket
+        c_bucket = "combat" if s.combat_active else "social"
+        
+        # Relationship bucket
+        # "hostile" (very_neg, neg), "neutral" (neutral), "friendly" (pos, very_pos)
+        aff = float(s.affinity)
+        if aff <= -0.2:
+            r_bucket = "hostile"
+        elif aff >= 0.2:
+            r_bucket = "friendly"
+        else:
+            r_bucket = "neutral"
+            
+        # Threat bucket
+        # armed if weapon drawn (WEAPON_DRAWN, ATTACKING) vs unarmed (WEAPON_LOWERED, HOLSTERED, NEUTRAL)
+        t_bucket = "unarmed"
+        if sig in (PlayerSignal.WEAPON_DRAWN, PlayerSignal.ATTACKING, PlayerSignal.CASTING):
+            t_bucket = "armed"
+
         return cls(
-            mood=(s.mood or "neutral").lower(),
-            relationship=(s.relationship or "stranger").lower(),
-            affinity_band=cls._affinity_band(float(s.affinity)),
-            player_signal=sig.value,
-            combat=bool(s.combat_active),
-            quest=bool(s.quest_active),
+            combat_bucket=c_bucket,
+            relationship_bucket=r_bucket,
+            threat_bucket=t_bucket,
         )
 
     def to_str(self) -> str:
-        return "|".join([
-            self.mood,
-            self.relationship,
-            self.affinity_band,
-            self.player_signal,
-            "combat" if self.combat else "no_combat",
-            "quest" if self.quest else "no_quest",
-        ])
+        return f"{self.combat_bucket}:{self.relationship_bucket}:{self.threat_bucket}"
+
+
+def _recover_tmp_files(path: Path):
+    """Recover from a crash where .tmp exists but main file is missing"""
+    tmp_path = path.with_suffix(".json.tmp")
+    # If main file missing but tmp exists, recover tmp
+    if not path.exists() and tmp_path.exists():
+        import os
+        os.replace(tmp_path, path)
+        print(f"Recovered bandit data from {tmp_path}")
+
 
 
 class NPCActionBandit:
@@ -155,10 +162,18 @@ class NPCActionBandit:
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
+        # Atomic write: save to .tmp, then rename
+        tmp_path = self.path.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump({"arms": self._arms}, f, indent=2, sort_keys=True)
+        
+        import os
+        os.replace(tmp_path, self.path)
 
     def load(self) -> None:
+        # Attempt recovery first
+        _recover_tmp_files(self.path)
+        
         if not self.path.exists():
             self._arms = {}
             return
@@ -171,3 +186,4 @@ class NPCActionBandit:
             print(f"Corrupted bandit data at {self.path}: {e}")
             # if corrupted, start fresh (better than crashing prod)
             self._arms = {}
+

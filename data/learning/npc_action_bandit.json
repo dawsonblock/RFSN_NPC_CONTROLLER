@@ -68,9 +68,9 @@
     },
     "neutral|stranger|neutral|question|no_combat|no_quest": {
       "agree": {
-        "alpha": 9.387422843404735,
+        "alpha": 10.387422843404735,
         "beta": 3.6125771565952647,
-        "n": 11.0
+        "n": 12.0
       },
       "apologize": {
         "alpha": 8.097136492671929,
