@@ -429,10 +429,10 @@ def ensure_llm_model_exists(target_path: str) -> Optional[Path]:
     We do NOT guess URLs for arbitrary GGUFs.
     Returns a Path if found, else None.
     """
-    if not target_path:
+    if not target_path or not str(target_path).strip():
         return None
-    
-    p = Path(target_path)
+
+    p = Path(str(target_path).strip()).expanduser().resolve()
 
     if p.exists():
         return p
