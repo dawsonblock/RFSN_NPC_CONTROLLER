@@ -8,11 +8,29 @@
     "max_tokens": 150
   },
   "tts": {
-    "backend": "kokoro",
-    "kokoro_model": "Models/kokoro/kokoro-v1.0.onnx",
-    "kokoro_voices": "Models/kokoro/voices-v1.0.bin",
-    "voice": "af_bella",
-    "speed": 1.0,
+    "backend": "chatterbox",
+    "kokoro": {
+      "model": "Models/kokoro/kokoro-v1.0.onnx",
+      "voices": "Models/kokoro/voices-v1.0.bin",
+      "voice": "af_bella",
+      "speed": 1.0
+    },
+    "chatterbox": {
+      "device": "cuda",
+      "turbo_model": "ResembleAI/chatterbox-turbo",
+      "full_model": "ResembleAI/chatterbox",
+      "default_exaggeration": 0.5,
+      "default_cfg": 0.5
+    },
+    "voice_prompts": {
+      "lydia": "Models/voices/lydia.wav",
+      "jarl_balgruuf": "Models/voices/jarl.wav"
+    },
+    "intensity_thresholds": {
+      "high_emotion": 0.7,
+      "high_valence": 0.7,
+      "high_arousal": 0.8
+    },
     "max_queue_size": 10
   },
   "learning": {
