@@ -45,6 +45,7 @@ class RuntimeState:
     world_model: Optional[Any] = None
     action_scorer: Optional[Any] = None
     npc_action_bandit: Optional[Any] = None
+    temporal_memory: Optional[Any] = None  # TemporalMemory for anticipatory selection
     hot_config: Optional[Any] = None
     
     def is_healthy(self) -> bool:

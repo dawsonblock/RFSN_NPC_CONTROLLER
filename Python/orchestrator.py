@@ -50,6 +50,7 @@ from learning import (
     FeatureVector, RewardSignals, TurnLog,
     NPCActionBandit, BanditKey
 )
+from learning.temporal_memory import TemporalMemory
 from learning.learning_contract import (
     LearningContract, LearningConstraints, StateSnapshot as LearningStateSnapshot,
     LearningUpdate, EvidenceType, WriteGateError
@@ -356,7 +357,15 @@ async def startup_event():
         path=Path(__file__).parent.parent / "data" / "learning" / "npc_action_bandit.json"
     )
 
-    logger.info("Learning layer initialized (Policy Adapter, Reward Model, Trainer, LearningContract, MemoryGovernance, IntentGate, StreamingPipeline, Observability, EventRecorder, StateMachine, NPCActionBandit)")
+    # Initialize TemporalMemory for anticipatory action selection
+    temporal_memory_config = config.get("learning", {}).get("temporal_memory", {})
+    temporal_memory = TemporalMemory(
+        max_size=temporal_memory_config.get("max_size", 50),
+        decay_rate=temporal_memory_config.get("decay_rate", 0.95),
+        adjustment_scale=temporal_memory_config.get("adjustment_scale", 0.1)
+    )
+
+    logger.info("Learning layer initialized (Policy Adapter, Reward Model, Trainer, LearningContract, MemoryGovernance, IntentGate, StreamingPipeline, Observability, EventRecorder, StateMachine, NPCActionBandit, TemporalMemory)")
     logger.info("World model initialized (retrieval-based, rule-based)")
     
     # Swap engines into RuntimeState atomically (Patch 1: atomic engine pointers)
@@ -376,7 +385,8 @@ async def startup_event():
         state_machine=state_machine,
         world_model=world_model,
         action_scorer=action_scorer,
-        npc_action_bandit=npc_action_bandit
+        npc_action_bandit=npc_action_bandit,
+        temporal_memory=temporal_memory
     ))
     logger.info("Runtime state initialized atomically")
 
@@ -699,6 +709,7 @@ async def stream_dialogue(request: DialogueRequest):
                 
                 # Get npc_action_bandit from runtime
                 npc_action_bandit = runtime.get().npc_action_bandit
+                temporal_memory = runtime.get().temporal_memory
                 
                 # Forced actions bypass learning (single candidate means forced)
                 if len(candidates) == 1 or not npc_action_bandit:
@@ -713,10 +724,22 @@ async def stream_dialogue(request: DialogueRequest):
                     
                     priors = {s.action: s.total_score for s in action_scores[:TOP_K]}
                     
+                    # Get temporal adjustments (anticipatory bias from recent experiences)
+                    temporal_adjustments = None
+                    if temporal_memory:
+                        temporal_adjustments = temporal_memory.get_prior_adjustments(
+                            current_state_snapshot
+                        )
+                        if temporal_adjustments:
+                            logger.debug(
+                                f"Temporal adjustments: {', '.join(f'{a.value}={v:+.3f}' for a, v in temporal_adjustments.items())}"
+                            )
+                    
                     selected_npc_action = npc_action_bandit.select(
                         key=bandit_key,
                         candidates=candidates,
                         priors=priors,
+                        temporal_adjustments=temporal_adjustments,
                     )
                     
                     # Get the score for the selected action
@@ -1092,6 +1115,7 @@ async def stream_dialogue(request: DialogueRequest):
         # Update NPC Action Bandit with reward signal
         if bandit_key and selected_npc_action and selected_action_score:
             npc_action_bandit = runtime.get().npc_action_bandit
+            temporal_memory = runtime.get().temporal_memory
             if npc_action_bandit:
                 try:
                     # Compute bandit reward (bounded [0, 1])
@@ -1105,10 +1129,6 @@ async def stream_dialogue(request: DialogueRequest):
                     
                     # Add micro-rewards
                     shaped_reward = base_reward + reward_accumulator.emit()
-                    
-                    # Negative evidence: output was blocked
-                    if output_blocked:
-                        shaped_reward -= 0.4
                         
                     # Clamp to [0, 1]
                     final_reward = max(0.0, min(1.0, shaped_reward))
@@ -1119,7 +1139,16 @@ async def stream_dialogue(request: DialogueRequest):
                     # Save periodically (every update for now)
                     npc_action_bandit.save()
                     
-                    logger.info(f"Bandit updated: action={selected_npc_action.value}, reward={bandit_reward:.2f}")
+                    # Record experience in temporal memory for anticipatory learning
+                    if temporal_memory and current_state_snapshot:
+                        temporal_memory.record(
+                            state=current_state_snapshot,
+                            action=selected_npc_action,
+                            reward=final_reward
+                        )
+                        logger.debug(f"Temporal memory recorded: action={selected_npc_action.value}, reward={final_reward:.2f}")
+                    
+                    logger.info(f"Bandit updated: action={selected_npc_action.value}, reward={final_reward:.2f}")
                 except Exception as e:
                     logger.error(f"Bandit update error: {e}")
         
