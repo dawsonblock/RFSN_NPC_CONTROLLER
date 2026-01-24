@@ -6,7 +6,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-290%20passing-success.svg)](Python/tests/)
+[![Tests](https://img.shields.io/badge/tests-300%20passing-success.svg)](Python/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-optimized-brightgreen.svg)](Python/)
 
@@ -24,7 +24,7 @@
 
 - **🧠 Intelligent Tokenization** - Smart sentence detection with abbreviation handling (Dr., Mr., Jarl)
 - **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (32 discrete actions)
-- **🎙️ Dual TTS Voice Router** - Chatterbox-Turbo (workhorse) + Chatterbox-Full (acting model) with auto-routing
+- **🎙️ Dual TTS Voice Router** - Chatterbox-Turbo + Chatterbox-Full with lazy loading, LRU audio cache, and auto-routing by emotional intensity
 - **💭 LLM Intent Classification** - Hybrid regex+LLM player intent extraction via Ollama
 - **😊 Emotional State System** - VAD-based emotional modeling with decay and persistence
 - **📈 Sentiment Tracking** - Multi-player longitudinal sentiment analysis with trend detection
@@ -38,12 +38,29 @@
 
 ### Production Hardening (v10.0)
 
-- ✅ **290 Tests** - Comprehensive coverage including streaming, learning, world model, voice routing, and persistence
+- ✅ **300 Tests** - Comprehensive coverage including streaming, learning, world model, voice routing with cache tests, and persistence
 - ✅ **Zero Race Conditions** - Deque+Condition queue pattern (no task_done/join bugs)
 - ✅ **Atomic State Swaps** - RuntimeState prevents half-applied config during reloads
 - ✅ **Full Persistence** - Temporal memory, emotional states, and bandit weights saved on shutdown
 - ✅ **Hybrid NLU** - LLM-powered intent classification with regex fallback
 - ✅ **Safety Rules** - Hard overrides prevent learned stupidity in critical states
+
+### Voice Router (v10.1)
+
+Intelligent dual-TTS engine that automatically selects between fast Turbo and expressive Full models:
+
+| Intensity | Engine | Use Case | Exaggeration |
+|-----------|--------|----------|--------------|
+| **LOW** | Chatterbox-Turbo | Guards, shopkeepers, barks | 0.3 |
+| **MEDIUM** | Chatterbox-Turbo | Companion casual chat | 0.6 |
+| **HIGH** | Chatterbox-Full | Memory callbacks, relationship moments | 0.8 |
+
+**Optimizations:**
+
+- 🚀 **Lazy Model Loading** - Full model (~2GB VRAM) loaded only on first HIGH request
+- 💾 **LRU Audio Cache** - Repeated lines served from cache (100 clips, 5-min TTL)
+- ⚡ **Intensity Precomputation** - Cached for stable NPC states (5s TTL)
+- 🔄 **Kokoro Fallback** - Graceful degradation when CUDA unavailable
 
 ---
 
@@ -146,6 +163,8 @@ docker run -p 8000:8000 rfsn-orchestrator
 | **State Machine** | Authoritative state transitions with invariants | `Python/state_machine.py` |
 | **Memory Manager** | Conversation persistence, backups | `Python/memory_manager.py` |
 | **Kokoro TTS** | Text-to-speech synthesis (ONNX) | `Python/kokoro_tts.py` |
+| **Voice Router** | Dual-TTS routing with lazy load, LRU cache | `Python/voice_router.py` |
+| **Chatterbox TTS** | Expressive TTS with emotion control | `Python/chatterbox_tts.py` |
 | **Ollama Client** | Local LLM HTTP API client | `Python/ollama_client.py` |
 | **Mobile Chat** | iPhone-optimized chat UI | `mobile_chat/` |
 | **Dashboard** | Live metrics visualization | `Dashboard/index.html` |
