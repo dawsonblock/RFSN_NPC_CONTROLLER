@@ -68,6 +68,7 @@ from world_model import (
 )
 from action_scorer import ActionScorer, UtilityFunction
 from llm_action_prompts import render_action_block
+from emotional_tone import get_emotion_manager, EmotionalTone
 import re
 
 # Configuration
@@ -801,6 +802,11 @@ async def stream_dialogue(request: DialogueRequest):
         )
         system_prompt += f"\n\n{action_block}"
 
+    # Inject emotional tone context for expressive dialogue
+    emotion_manager = get_emotion_manager()
+    emotional_prompt = emotion_manager.get_prompt_injection(state.npc_name)
+    system_prompt += f"\n\n{emotional_prompt}"
+
     # Require a structured tail block (keeps streaming dialogue normal, but adds a machine-verifiable footer)
     system_prompt += (
         "\n\nAt the end of your response, append a JSON block in a fenced ```json code block with keys: "
@@ -969,6 +975,18 @@ async def stream_dialogue(request: DialogueRequest):
                     # Process emotion on authoritative stored text
                     emotion_info = multi_manager.process_response(npc_name, stored_text)
                     logger.info(f"NPC {npc_name} emotion: {emotion_info['emotion']['primary']}")
+                    
+                    # Update emotional state based on action taken
+                    emotion_mgr = get_emotion_manager()
+                    if selected_npc_action:
+                        # Player sentiment from features
+                        player_sentiment = features.recent_sentiment if features else 0.0
+                        emotion_mgr.update_from_action(
+                            npc_name=npc_name,
+                            action_name=selected_npc_action.value,
+                            player_sentiment=player_sentiment
+                        )
+                        logger.debug(f"Emotional state updated for {npc_name}: {emotion_mgr.get_state(npc_name).primary_tone.value}")
                     
                     # Micro-reward: Positive emotion
                     if emotion_info['emotion']['primary'] in ("joy", "trust", "anticipation"):
@@ -1350,6 +1368,24 @@ async def get_bandit_arms():
                 }
     
     return {"arms": summary}
+
+
+@app.get("/api/learning/emotions")
+async def get_emotional_states():
+    """Get all NPC emotional states for visualization."""
+    emotion_manager = get_emotion_manager()
+    return {
+        "states": emotion_manager.list_states(),
+        "tones": [t.value for t in EmotionalTone]
+    }
+
+
+@app.get("/api/learning/emotions/{npc_name}")
+async def get_npc_emotional_state(npc_name: str):
+    """Get emotional state for a specific NPC."""
+    emotion_manager = get_emotion_manager()
+    state = emotion_manager.get_state(npc_name)
+    return state.to_dict()
 
 
 @app.post("/api/tune-performance", dependencies=[Depends(require_auth)])
