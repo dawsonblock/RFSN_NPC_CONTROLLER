@@ -6,7 +6,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-274%20passing-success.svg)](Python/tests/)
+[![Tests](https://img.shields.io/badge/tests-290%20passing-success.svg)](Python/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-optimized-brightgreen.svg)](Python/)
 
@@ -24,7 +24,7 @@
 
 - **🧠 Intelligent Tokenization** - Smart sentence detection with abbreviation handling (Dr., Mr., Jarl)
 - **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (32 discrete actions)
-- **🎙️ Real-Time TTS** - Kokoro-ONNX engine with streaming audio playback
+- **🎙️ Dual TTS Voice Router** - Chatterbox-Turbo (workhorse) + Chatterbox-Full (acting model) with auto-routing
 - **💭 LLM Intent Classification** - Hybrid regex+LLM player intent extraction via Ollama
 - **😊 Emotional State System** - VAD-based emotional modeling with decay and persistence
 - **📈 Sentiment Tracking** - Multi-player longitudinal sentiment analysis with trend detection
@@ -38,7 +38,7 @@
 
 ### Production Hardening (v10.0)
 
-- ✅ **274 Tests** - Comprehensive coverage including streaming, learning, world model, and persistence
+- ✅ **290 Tests** - Comprehensive coverage including streaming, learning, world model, voice routing, and persistence
 - ✅ **Zero Race Conditions** - Deque+Condition queue pattern (no task_done/join bugs)
 - ✅ **Atomic State Swaps** - RuntimeState prevents half-applied config during reloads
 - ✅ **Full Persistence** - Temporal memory, emotional states, and bandit weights saved on shutdown
