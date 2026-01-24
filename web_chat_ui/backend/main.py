@@ -106,7 +106,7 @@ async def proxy_chat_stream(request: ChatRequest):
                                # `streaming_engine.generate_streaming` is called.
                                # It generates tokens and pipes to `self.voice.process_stream`.
                                # So text IS generated.
-        "tts_engine": "piper" 
+        "tts_engine": "kokoro" 
     }
 
     url = f"{ORCHESTRATOR_BASE_URL}{ORCHESTRATOR_STREAM_PATH}"

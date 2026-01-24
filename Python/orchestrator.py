@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RFSN GenAI Orchestrator - Production Streaming Build
-Complete system with Piper/xVASynth TTS, security, metrics, and multi-NPC support.
+Complete system with Kokoro TTS, Ollama LLM, security, metrics, and multi-NPC support.
 """
 from version import ORCHESTRATOR_VERSION, STREAMING_ENGINE_VERSION, get_version_string
 from runtime_state import Runtime, RuntimeState
@@ -31,8 +31,8 @@ from learning.trainer import Trainer
 
 # Import core modules
 from streaming_engine import StreamingMantellaEngine, StreamingMetrics, RFSNState
-from piper_tts import PiperTTSEngine, setup_piper_voice
-from mlx_tts import MlxTTSEngine
+from kokoro_tts import KokoroTTSEngine, setup_kokoro_voice
+from ollama_client import OllamaClient, ensure_ollama_ready
 from memory_manager import ConversationManager, list_backups
 
 # Import enhancements
@@ -125,7 +125,7 @@ app.include_router(metrics_router, tags=["monitoring"])
 # Global instances - wrapped by runtime for atomic swaps
 runtime = Runtime()
 streaming_engine: Optional[StreamingMantellaEngine] = None
-piper_engine: Optional[PiperTTSEngine] = None
+tts_engine: Optional[KokoroTTSEngine] = None
 xva_engine: Optional[XVASynthEngine] = None
 multi_manager = MultiNPCManager()
 active_ws: List[WebSocket] = []
@@ -150,88 +150,100 @@ state_machine: Optional[StateMachine] = None
 @app.on_event("startup")
 async def startup_event():
     """Initialize all engines on startup"""
-    global streaming_engine, piper_engine, xva_engine
+    global streaming_engine, tts_engine, xva_engine
     
     logger.info("=" * 70)
     logger.info(get_version_string() + " - STARTING UP")
     logger.info("=" * 70)
     
-    # Verify models
+    # Verify models (optional for Ollama mode)
     if not os.environ.get("SKIP_MODELS"):
         await asyncio.to_thread(setup_models)
     else:
         logger.warning("Skipping model downloads (SKIP_MODELS=1)")
     
-    # Setup xVASynth
+    # Setup xVASynth (legacy support)
     if config_watcher.get("xvasynth_enabled", False):
         xva_engine = XVASynthEngine()
         logger.info(f"xVASynth initialized (Available: {xva_engine.available})")
 
-    # Initialize TTS (MLX or Piper)
-    tts_backend = config.get("server", {}).get("tts", {}).get("backend", "piper")
-    if tts_backend == "mlx":
+    # Initialize TTS (Kokoro)
+    tts_config = config.get("tts", {})
+    tts_backend = tts_config.get("backend", "kokoro")
+    
+    if tts_backend == "kokoro":
         try:
-             # MLX Backend
-             mlx_model_rel = config.get("server", {}).get("tts", {}).get("mlx_model", "Models/Chatterbox-Turbo-TTS-8bit")
-             # Resolve path relative to project root
-             project_root = Path(__file__).parent.parent
-             mlx_model_path = str(project_root / mlx_model_rel)
-             
-             tts_speed = config.get("server", {}).get("tts", {}).get("speed", 1.0)
-             q_size = config.get("server", {}).get("performance", {}).get("audio_queue_size", 10)
-             
-             logger.info(f"Setting up MLX Chatterbox TTS: {mlx_model_path} (Speed={tts_speed})")
-             piper_engine = MlxTTSEngine(model_path=mlx_model_path, speed=tts_speed, max_queue_size=q_size)
-             logger.info("MLX TTS Engine initialized successfully")
-        except Exception as e:
-             logger.error(f"Failed to initialize MLX TTS: {e}")
-             piper_engine = None
-    elif config.get("piper_enabled", False):
-        # Fallback to Piper
-        try:
-            tts_conf = config.get("server", {}).get("tts", {})
-            model_name = tts_conf.get("piper_model", config.get("piper_model", "en_US-lessac-medium"))
+            project_root = Path(__file__).parent.parent
+            kokoro_model = tts_config.get("kokoro_model", "Models/kokoro/kokoro-v1.0.onnx")
+            kokoro_voices = tts_config.get("kokoro_voices", "Models/kokoro/voices-v1.0.bin")
             
-            # Strip .onnx if present for setup_piper_voice
-            if model_name.endswith(".onnx"):
-                model_name = model_name[:-5]
+            model_path = str(project_root / kokoro_model)
+            voices_path = str(project_root / kokoro_voices)
+            
+            # Auto-download if not present
+            if not Path(model_path).exists() or not Path(voices_path).exists():
+                logger.info("[Kokoro] Model not found, downloading...")
+                model_path, voices_path = setup_kokoro_voice()
+            
+            if model_path and voices_path:
+                tts_speed = tts_config.get("speed", 1.0)
+                voice = tts_config.get("voice", "af_bella")
+                q_size = tts_config.get("max_queue_size", 10)
                 
-            logger.info(f"Setting up Piper voice: {model_name}")
-            model_path, config_path = setup_piper_voice(model_name)
-            
-            if model_path:
-                length_scale = config.get("performance", {}).get("tts_speed", 1.0)
-                queue_size = config.get("performance", {}).get("backpressure_queue_size", 10)
-                logger.info(f"Initializing Piper with speed={length_scale}, queue_size={queue_size}")
-                piper_engine = PiperTTSEngine(model_path, config_path, length_scale=length_scale, max_queue_size=queue_size)
-                logger.info("Piper TTS initialized")
+                logger.info(f"Setting up Kokoro TTS: voice={voice}, speed={tts_speed}")
+                tts_engine = KokoroTTSEngine(
+                    model_path=model_path,
+                    voices_path=voices_path,
+                    voice=voice,
+                    speed=tts_speed,
+                    max_queue_size=q_size
+                )
+                logger.info("Kokoro TTS Engine initialized successfully")
             else:
-                logger.warning("Piper TTS model failed to download. Running in mock mode.")
-                piper_engine = PiperTTSEngine()
+                logger.warning("Kokoro TTS model download failed. Running in mock mode.")
+                tts_engine = None
         except Exception as e:
-            logger.error(f"Failed to initialize Piper TTS: {e}")
-            piper_engine = None
+            logger.error(f"Failed to initialize Kokoro TTS: {e}")
+            tts_engine = None
 
-    # Initialize streaming LLM
-    from model_manager import ensure_llm_model_exists
-
-    cfg_model_path = config_watcher.get("model_path")
-    resolved = ensure_llm_model_exists(cfg_model_path)
-
+    # Initialize streaming LLM with Ollama
+    llm_config = config.get("llm", {})
+    llm_backend = llm_config.get("backend", "ollama")
+    
     if os.environ.get("SKIP_MODELS"):
         logger.info("Using MOCK LLM (SKIP_MODELS set)")
-        streaming_engine = StreamingMantellaEngine(None)
+        streaming_engine = StreamingMantellaEngine(backend="mock")
+    elif llm_backend == "ollama":
+        # Ollama backend
+        ollama_config = {
+            "ollama_host": llm_config.get("ollama_host", "http://localhost:11434"),
+            "ollama_model": llm_config.get("ollama_model", "llama3.2"),
+            "temperature": llm_config.get("temperature", 0.7),
+            "max_tokens": llm_config.get("max_tokens", 150)
+        }
+        streaming_engine = StreamingMantellaEngine(
+            backend="ollama",
+            ollama_config=ollama_config
+        )
+        logger.info(f"Ollama LLM initialized (model={ollama_config['ollama_model']})")
     else:
+        # Fallback to llama-cpp
+        from model_manager import ensure_llm_model_exists
+        cfg_model_path = llm_config.get("model_path", config_watcher.get("model_path"))
+        resolved = ensure_llm_model_exists(cfg_model_path)
+        
         if resolved is None:
             logger.error(f"Configured model_path not found: {cfg_model_path}")
-            logger.error("Fix: place your model file at that path, or put it in ./Models/ and update model_path in config.json accordingly.")
-            streaming_engine = StreamingMantellaEngine(None)
+            streaming_engine = StreamingMantellaEngine(backend="mock")
         else:
-            streaming_engine = StreamingMantellaEngine(str(resolved))
+            streaming_engine = StreamingMantellaEngine(
+                model_path=str(resolved),
+                backend="llama_cpp"
+            )
     
-    # Connect default TTS (Piper)
-    if piper_engine and streaming_engine:
-        streaming_engine.voice.set_tts_engine(piper_engine)
+    # Connect TTS engine
+    if tts_engine and streaming_engine:
+        streaming_engine.voice.set_tts_engine(tts_engine)
     
     # Sync global API Key Manager
     from security import api_key_manager
@@ -350,7 +362,7 @@ async def startup_event():
     # Swap engines into RuntimeState atomically (Patch 1: atomic engine pointers)
     runtime.swap(RuntimeState(
         streaming_engine=streaming_engine,
-        piper_engine=piper_engine,
+        tts_engine=tts_engine,
         xva_engine=xva_engine,
         policy_adapter=policy_adapter,
         trainer=trainer,
@@ -381,8 +393,8 @@ async def shutdown_event():
     """Graceful shutdown"""
     logger.info("Shutting down engines...")
     
-    if piper_engine:
-        piper_engine.shutdown()
+    if tts_engine:
+        tts_engine.shutdown()
     if xva_engine:
         xva_engine.shutdown()
     if streaming_engine:
@@ -523,29 +535,16 @@ async def stream_dialogue(request: DialogueRequest):
         inc_errors()
         raise HTTPException(status_code=503, detail="Streaming engine not ready")
     
-    # Select TTS engine and gating (Patch 4)
+    # Select TTS engine and gating
     if streaming_engine and streaming_engine.voice:
         streaming_engine.voice.enabled = request.enable_voice
-        
-        # Runtime TTS swap (if requested MLX and piper is active)
-        if request.tts_engine == "mlx" and piper_engine and isinstance(piper_engine, MlxTTSEngine):
-             # Already MLX (MlxTTSEngine is stored in piper_engine variable in startup_event for MLX backend)
-             pass
-        elif request.tts_engine == "mlx" and any(isinstance(runtime.get().streaming_engine.voice._tts_engine_ref, t) for t in [MlxTTSEngine]):
-             pass # Logic to swap could go here if more engines were active
     
-    # Select TTS engine
-    current_tts = piper_engine
+    # Select TTS engine (Kokoro is default, xVASynth for special cases)
+    current_tts = tts_engine
     if request.tts_engine == "xvasynth" and xva_engine:
         # Determine voice for NPC
         voice_key = xva_engine.get_voice_for_npc(request.npc_state.get("npc_name", "Unknown"))
-        # We need to bridge xVASynth to StreamingVoiceSystem if we want streaming
-        # For now, if xVASynth is requested, we might need to swap the engine or use it directly
-        # But StreamingMantellaEngine uses self.voice which holds ONE engine.
-        # Capability Swap:
-        # This implementation is simple: if xvasynth, we assume non-streaming TTS for now 
-        # OR we'd need to update StreamingVoiceSystem to handle multiple engines.
-        # Let's keep it simple: stick to Piper for streaming, use xVASynth for separate calls or future update.
+        # xVASynth for special non-streaming cases
         pass
     
     # Build RFSN state
@@ -1209,18 +1208,22 @@ async def clear_memory(npc_name: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Operational health check (Patch v8.9)"""
-    model_ok = streaming_engine is not None and streaming_engine.llm is not None
-    tts_ok = piper_engine is not None
+    """Operational health check"""
+    # Check if LLM is ready (either Ollama or llama-cpp)
+    model_ok = streaming_engine is not None and (
+        streaming_engine.ollama_client is not None or 
+        streaming_engine.llm is not None
+    )
+    tts_ok = tts_engine is not None
     q_size = len(streaming_engine.voice.speech_queue) if streaming_engine else 0
     
     return {
         "status": "healthy" if model_ok and tts_ok else "degraded",
         "model_loaded": model_ok,
-        "piper_ready": tts_ok,
+        "tts_ready": tts_ok,
         "queue_size": q_size,
         "active_npc": list(multi_manager.sessions.keys()),
-        "uptime": time.time() # Simplistic uptime
+        "uptime": time.time()
     }
 
 
@@ -1229,10 +1232,10 @@ async def get_status():
     # System health check
     return {
         "status": "healthy",
-        "version": "8.2",
+        "version": "9.0",
         "components": {
             "streaming_llm": streaming_engine is not None,
-            "piper_tts": piper_engine is not None,
+            "kokoro_tts": tts_engine is not None,
             "xvasynth": xva_engine.available if xva_engine else False,
             "memory_system": True,
             "active_websockets": len(active_ws),

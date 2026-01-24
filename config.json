@@ -1,31 +1,29 @@
 {
-  "model_path": "../Models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-  "piper_enabled": false,
-  "piper_model": "en_US-ryan-low",
+  "llm": {
+    "backend": "ollama",
+    "ollama_host": "http://localhost:11434",
+    "ollama_model": "llama3.2",
+    "model_path": "../Models/mistral-7b-instruct-v0.2.Q4_K_M.gguf",
+    "temperature": 0.7,
+    "max_tokens": 150
+  },
+  "tts": {
+    "backend": "kokoro",
+    "kokoro_model": "Models/kokoro/kokoro-v1.0.onnx",
+    "kokoro_voices": "Models/kokoro/voices-v1.0.bin",
+    "voice": "af_bella",
+    "speed": 1.0,
+    "max_queue_size": 10
+  },
   "memory_enabled": true,
-  "max_queue_size": 10,
-  "temperature": 0.1,
-  "max_tokens": 150,
   "context_limit": 4,
   "server": {
     "host": "127.0.0.1",
     "port": 8000,
-    "log_level": "info",
-    "tts": {
-      "backend": "mlx",
-      "piper_model": "en_US-ryan-low.onnx",
-      "mlx_model": "Models/Chatterbox-Turbo-TTS-8bit",
-      "speed": 1.0,
-      "sample_rate": 24000
-    },
-    "performance": {
-      "text_chunk_size": 20,
-      "audio_queue_size": 10
-    }
+    "log_level": "info"
   },
   "performance": {
     "target_latency_ms": 1500,
-    "backpressure_queue_size": 10,
-    "tts_speed": 1.0
+    "backpressure_queue_size": 10
   }
 }

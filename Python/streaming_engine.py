@@ -502,21 +502,53 @@ class StreamingVoiceSystem:
 
 
 class StreamingMantellaEngine:
-    """Streaming LLM wrapper with KV cache optimization"""
+    """Streaming LLM wrapper with support for Ollama and llama-cpp backends"""
     
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: str = None, backend: str = "ollama", ollama_config: dict = None):
         self.model_path = model_path
+        self.backend = backend
         self.llm = None
-        self.voice = StreamingVoiceSystem(tts_engine="piper", max_queue_size=3)
+        self.ollama_client = None
+        self.voice = StreamingVoiceSystem(tts_engine="kokoro", max_queue_size=3)
         self.temperature = 0.7
-        self.max_tokens = 80
+        self.max_tokens = 150
         
-        if model_path and Path(model_path).exists():
-            self._load_model(model_path)
+        # Initialize based on backend
+        if backend == "ollama":
+            self._init_ollama(ollama_config or {})
+        elif backend == "llama_cpp" and model_path and Path(model_path).exists():
+            self._load_llama_cpp(model_path)
         else:
-            logger.warning(f"Model not found: {model_path}. Running in mock mode.")
+            logger.warning(f"Backend: {backend}, Model: {model_path}. Running in mock mode.")
     
-    def _load_model(self, model_path: str):
+    def _init_ollama(self, config: dict):
+        """Initialize Ollama client"""
+        try:
+            from ollama_client import OllamaClient
+            
+            host = config.get("ollama_host", "http://localhost:11434")
+            model = config.get("ollama_model", "llama3.2")
+            
+            self.ollama_client = OllamaClient(
+                host=host,
+                model=model,
+                temperature=config.get("temperature", 0.7),
+                max_tokens=config.get("max_tokens", 150)
+            )
+            
+            if self.ollama_client.is_available():
+                logger.info(f"StreamingMantellaEngine: Ollama backend ready (model={model})")
+            else:
+                logger.warning("Ollama server not available. Start with: ollama serve")
+                self.ollama_client = None
+        except ImportError:
+            logger.warning("ollama_client not found. Running in mock mode.")
+            self.ollama_client = None
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama: {e}")
+            self.ollama_client = None
+    
+    def _load_llama_cpp(self, model_path: str):
         """Load llama.cpp model with KV cache persistence"""
         try:
             from llama_cpp import Llama
@@ -533,46 +565,68 @@ class StreamingMantellaEngine:
             logger.error(f"Failed to load model: {e}")
     
     def generate_streaming(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7, pitch: Optional[float] = None, rate: Optional[float] = None) -> Generator[SentenceChunk, None, None]:
-        """Generate with streaming and full metrics - Patch 3 Stop Conditions"""
+        """Generate with streaming and full metrics"""
         
-        if self.llm is None:
-            # Mock token stream
-            def mock_tokens():
-                text = "I am a Skyrim NPC running in mock mode. I should still detect sentences, abbreviate Dr. correctly, and queue for TTS."
-                for word in text.split(" "):
-                    yield word + " "
-                    time.sleep(0.05)
-                yield ""
-            yield from self.voice.process_stream(mock_tokens(), pitch=pitch, rate=rate)
+        # Try Ollama first
+        if self.ollama_client is not None:
+            def ollama_token_gen():
+                stop_sequences = [
+                    "<|eot_id|>", "<|end|>", "</s>", 
+                    "\nPlayer:", "\nUser:", "\nYou:", "\nNPC:", "Player:", "User:",
+                    "\nSystem:", "System:", "[SYSTEM MODE:", "**System:"
+                ]
+                for token in self.ollama_client.generate_streaming(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    stop=stop_sequences
+                ):
+                    yield token
+            
+            yield from self.voice.process_stream(ollama_token_gen(), pitch=pitch, rate=rate)
             return
         
-        # Create token generator with Expanded Stops (Patch 3)
-        def token_gen():
-            stream = self.llm(
-                prompt,
-                max_tokens=max_tokens,
-                stop=["<|eot_id|>", "<|end|>", "</s>", 
-                    "\nPlayer:", "\nUser:", "\nYou:", "\nNPC:", "Player:", "User:",
-                    "\nSystem:", "System:", "[SYSTEM MODE:", "**System:"],
-                stream=True,
-                echo=False,
-                temperature=temperature,
-            )
-            for chunk in stream:
-                if 'choices' in chunk and chunk['choices']:
-                    text = chunk['choices'][0].get('text', '')
-                    if text:
-                        yield text
+        # Fallback to llama-cpp
+        if self.llm is not None:
+            def llama_token_gen():
+                stream = self.llm(
+                    prompt,
+                    max_tokens=max_tokens,
+                    stop=["<|eot_id|>", "<|end|>", "</s>", 
+                        "\nPlayer:", "\nUser:", "\nYou:", "\nNPC:", "Player:", "User:",
+                        "\nSystem:", "System:", "[SYSTEM MODE:", "**System:"],
+                    stream=True,
+                    echo=False,
+                    temperature=temperature,
+                )
+                for chunk in stream:
+                    if 'choices' in chunk and chunk['choices']:
+                        text = chunk['choices'][0].get('text', '')
+                        if text:
+                            yield text
+            
+            yield from self.voice.process_stream(llama_token_gen(), pitch=pitch, rate=rate)
+            return
         
-        # Process through voice system
-        yield from self.voice.process_stream(token_gen(), pitch=pitch, rate=rate)
+        # Mock mode
+        def mock_tokens():
+            text = "I am an NPC running in mock mode. Please start Ollama with: ollama serve"
+            for word in text.split(" "):
+                yield word + " "
+                time.sleep(0.05)
+            yield ""
+        yield from self.voice.process_stream(mock_tokens(), pitch=pitch, rate=rate)
 
     def apply_tuning(self, *, temperature: float = None, max_tokens: int = None, max_queue_size: int = None):
         """Apply runtime performance settings"""
         if temperature is not None:
             self.temperature = float(temperature)
+            if self.ollama_client:
+                self.ollama_client.temperature = float(temperature)
         if max_tokens is not None:
             self.max_tokens = int(max_tokens)
+            if self.ollama_client:
+                self.ollama_client.max_tokens = int(max_tokens)
         if max_queue_size is not None:
             self.voice.set_max_queue_size(int(max_queue_size))
         
@@ -581,12 +635,14 @@ class StreamingMantellaEngine:
     def shutdown(self):
         """Cleanup resources"""
         self.voice.shutdown()
+        if self.ollama_client:
+            self.ollama_client.shutdown()
         logger.info("StreamingMantellaEngine shutdown complete")
 
 
 if __name__ == "__main__":
     # Quick test
-    engine = StreamingMantellaEngine()
+    engine = StreamingMantellaEngine(backend="ollama")
     print("Testing streaming engine...")
     
     for chunk in engine.generate_streaming("Hello"):
@@ -594,3 +650,4 @@ if __name__ == "__main__":
     
     engine.shutdown()
     print("Test complete!")
+

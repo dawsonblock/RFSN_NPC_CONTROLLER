@@ -22,7 +22,7 @@ class RuntimeState:
     """
     # Core engines (None = not loaded/available)
     streaming_engine: Optional[Any] = None
-    piper_engine: Optional[Any] = None
+    tts_engine: Optional[Any] = None
     xva_engine: Optional[Any] = None
     
     # Configuration snapshot (read-only after creation)
@@ -50,14 +50,16 @@ class RuntimeState:
     def is_healthy(self) -> bool:
         """Returns True if minimum required components are loaded"""
         return (
-            self.streaming_engine is not None and 
-            self.streaming_engine.llm is not None
+            self.streaming_engine is not None and (
+                getattr(self.streaming_engine, 'ollama_client', None) is not None or
+                getattr(self.streaming_engine, 'llm', None) is not None
+            )
         )
     
-    def get_tts_engine(self, engine_type: str = "piper"):
+    def get_tts_engine(self, engine_type: str = "kokoro"):
         """Get TTS engine by type"""
-        if engine_type == "piper":
-            return self.piper_engine
+        if engine_type in ("kokoro", "piper"):
+            return self.tts_engine
         elif engine_type == "xvasynth":
             return self.xva_engine
         return None
@@ -113,14 +115,14 @@ class Runtime:
         Convenience method: create new state with specified updates.
         
         Usage:
-            runtime.update(piper_engine=new_piper)
+            runtime.update(tts_engine=new_tts)
         """
         with self._state_lock:
             current = self._state
             # Create new dataclass with updated fields
             new_state = RuntimeState(
                 streaming_engine=kwargs.get('streaming_engine', current.streaming_engine),
-                piper_engine=kwargs.get('piper_engine', current.piper_engine),
+                tts_engine=kwargs.get('tts_engine', current.tts_engine),
                 xva_engine=kwargs.get('xva_engine', current.xva_engine),
                 config=kwargs.get('config', current.config),
                 policy_adapter=kwargs.get('policy_adapter', current.policy_adapter),

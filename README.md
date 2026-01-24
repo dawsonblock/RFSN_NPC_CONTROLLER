@@ -21,9 +21,10 @@
 ## 🌟 Features
 
 ### Core Capabilities
+
 - **🧠 Intelligent Tokenization** - Smart sentence detection with abbreviation handling (Dr., Mr., Jarl)
 - **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (GREET, APOLOGIZE, THREATEN, etc.)
-- **🎙️ Real-Time TTS** - Piper engine with streaming audio playback
+- **🎙️ Real-Time TTS** - Kokoro-ONNX engine with streaming audio playback
 - **⚡ Thread-Safe Queue** - Deque+Condition pattern eliminates race conditions
 - **🔒 Atomic Runtime** - Safe hot-reloads without half-applied config
 - **📊 Live Metrics** - WebSocket-based performance monitoring dashboard
@@ -32,6 +33,7 @@
 - **🛡️ Safety Rules** - Hard overrides prevent learned stupidity in combat/trust/quest contexts
 
 ### Production Hardening (v9.0)
+
 - ✅ **142 Tests** - Comprehensive coverage including edge cases, learning layer, and world model integration
 - ✅ **Zero Race Conditions** - Deque+Condition queue pattern (no task_done/join bugs)
 - ✅ **Atomic State Swaps** - RuntimeState prevents half-applied config during reloads
@@ -44,9 +46,11 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.9+
+
+- Python 3.10+ (required for Kokoro TTS)
 - 4GB RAM minimum
 - macOS, Linux, or Windows
+- Ollama (for local LLM)
 
 ### Installation
 
@@ -55,16 +59,27 @@
 git clone https://github.com/dawsonblock/RFSN-ORCHESTRATOR.git
 cd RFSN-ORCHESTRATOR
 
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
 # Install dependencies
-cd Python
-pip install -r requirements.txt
+pip install -r Python/requirements-core.txt
+pip install kokoro-onnx
+
+# Install Ollama (macOS)
+brew install ollama
+ollama serve &
+ollama pull llama3.2
 
 # Launch the server
-python launch_optimized.py
+cd Python
+python -m uvicorn orchestrator:app --host 0.0.0.0 --port 8000
 ```
 
 **Server URL**: `http://127.0.0.1:8000`  
-**Dashboard**: `http://127.0.0.1:8000` (opens automatically)
+**Dashboard**: `http://127.0.0.1:8000`
+**Mobile UI**: `http://127.0.0.1:8080` (run `python mobile_chat/server.py`)
 
 ### Docker (Optional)
 
@@ -83,8 +98,8 @@ docker run -p 8000:8000 rfsn-orchestrator
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   FastAPI    │───▶│  Streaming   │───▶│  Piper TTS   │  │
-│  │   Server     │    │   Engine     │    │  (sync-only) │  │
+│  │   FastAPI    │───▶│  Streaming   │───▶│ Kokoro TTS   │  │
+│  │   Server     │    │   Engine     │    │ (ONNX/async) │  │
 │  └──────────────┘    └──────────────┘    └──────────────┘  │
 │         │                    │                    │          │
 │         ▼                    ▼                    ▼          │
@@ -115,7 +130,9 @@ docker run -p 8000:8000 rfsn-orchestrator
 | **Runtime State** | Atomic state management for safe reloads | `Python/runtime_state.py` |
 | **State Machine** | Authoritative state transitions with invariants | `Python/state_machine.py` |
 | **Memory Manager** | Conversation persistence, backups | `Python/memory_manager.py` |
-| **Piper TTS** | Text-to-speech synthesis | `Python/piper_tts.py` |
+| **Kokoro TTS** | Text-to-speech synthesis (ONNX) | `Python/kokoro_tts.py` |
+| **Ollama Client** | Local LLM HTTP API client | `Python/ollama_client.py` |
+| **Mobile Chat** | iPhone-optimized chat UI | `mobile_chat/` |
 | **Dashboard** | Live metrics visualization | `Dashboard/index.html` |
 
 ---
@@ -644,11 +661,20 @@ for i in range(100):
 
 ```json
 {
-  "llm_model_path": "Models/Mantella-Skyrim-Llama-3-8B-Q4_K_M.gguf",
+  "llm": {
+    "backend": "ollama",
+    "ollama_host": "http://localhost:11434",
+    "ollama_model": "llama3.2",
+    "llm_model_path": "Models/Mantella-Skyrim-Llama-3-8B-Q4_K_M.gguf"
+  },
+  "tts": {
+    "backend": "kokoro",
+    "voice": "af_bella",
+    "speed": 1.0
+  },
   "temperature": 0.7,
   "max_tokens": 150,
   "max_queue_size": 3,
-  "piper_model": "en_US-lessac-medium",
   "log_level": "INFO"
 }
 ```
@@ -707,6 +733,7 @@ RFSN-ORCHESTRATOR/
 ## 📈 Changelog
 
 ### v9.0 (Latest) - Thread-Safe Queue Rewrite
+
 - **Deque+Condition queue** replaces queue.Queue (eliminates race conditions)
 - Removed all task_done/join semantics
 - Drop policy runs atomically with consumer
@@ -716,11 +743,13 @@ RFSN-ORCHESTRATOR/
 - Added `enable_queue` flag to Piper TTS
 
 ### v8.10 - Critical Bug Fixes
+
 - Fixed `/ws/metrics` crash (missing `asdict` import)
 - Corrected end-of-stream flush semantics
 - Renamed `flush()` → `reset()`, added `flush_pending()`
 
 ### v8.9 - Operational Hardening
+
 - Tokenizer continuation fix
 - Explicit end-of-stream flush
 - Stream hygiene improvements
@@ -728,11 +757,13 @@ RFSN-ORCHESTRATOR/
 - Structured trace logging
 
 ### v8.8 - Backpressure & Resize Hardening
+
 - Coherent queue trimming (keep first/last)
 - Worker wakeup sentinel
 - Thread-safe resize operations
 
 ### v8.7 - Reliability Hardening
+
 - Smart sentence boundary detection
 - Quote-aware tokenization
 - Newline boundary support
