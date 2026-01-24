@@ -9,7 +9,7 @@ from streaming_engine import StreamTokenizer
 async def test_health_check_endpoint():
     """Verify /api/health returns correct structure"""
     with patch('orchestrator.streaming_engine') as mock_engine:
-        with patch('orchestrator.piper_engine') as mock_piper:
+        with patch('orchestrator.tts_engine') as mock_tts:
             mock_engine.llm = MagicMock()
             # Mock both qsize() and __len__() for DequeSpeechQueue compatibility
             mock_engine.voice.speech_queue.qsize.return_value = 5
@@ -18,7 +18,7 @@ async def test_health_check_endpoint():
             res = await health_check()
             assert res['status'] == 'healthy'
             assert res['model_loaded'] is True
-            assert res['piper_ready'] is True
+            assert res['tts_ready'] is True
             assert res['queue_size'] == 5
             assert 'uptime' in res
 

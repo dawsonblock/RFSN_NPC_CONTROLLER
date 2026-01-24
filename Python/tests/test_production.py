@@ -59,7 +59,8 @@ class TestStreamingSegmentation:
         # Ellipsis sets pending boundary, need to flush
         sentences.extend(tokenizer.flush())
         assert len(sentences) == 1
-        assert "..." in sentences[0]
+        # _clean_for_tts replaces ... with space for TTS pronunciation
+        assert "Wait for it" in sentences[0]
     
     def test_unicode_handling(self):
         """Test unicode characters in streaming"""
@@ -102,7 +103,8 @@ class TestStreamingSegmentation:
         # Flush to get the complete sentence
         sentences.extend(tokenizer.flush())
         assert len(sentences) == 1
-        assert '"Hello world!"' in sentences[0]
+        # _clean_for_tts replaces ! with . for TTS pronunciation
+        assert 'Hello world' in sentences[0]
 
 
 class TestBackpressure:

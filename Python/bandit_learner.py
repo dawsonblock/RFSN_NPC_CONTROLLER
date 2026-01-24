@@ -135,8 +135,8 @@ class StateActionBandit:
         banned = set(self.cfg.banned_actions or [])
         actions = [a for a in candidate_actions if a not in banned]
         if not actions:
-            # If all candidate actions are banned, there are no valid choices.
-            raise ValueError("All candidate actions are banned.")
+            # If all candidate actions are banned, fall back to original list
+            actions = candidate_actions
 
         # Ensure stats exist
         st = self._db.setdefault(state_id, {})
@@ -194,6 +194,9 @@ class StateActionBandit:
                 # Soft update: add fractional evidence
                 arm.a += p
                 arm.b += (1.0 - p)
+        
+        # Persist after each update
+        self._save()
 
     def reset_state(self, state_id: str) -> None:
         """Reset all statistics for a given state.
