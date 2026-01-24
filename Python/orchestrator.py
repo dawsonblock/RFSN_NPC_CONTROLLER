@@ -365,9 +365,21 @@ async def startup_event():
         decay_rate=temporal_memory_config.get("decay_rate", 0.95),
         adjustment_scale=temporal_memory_config.get("adjustment_scale", 0.1)
     )
-
-    logger.info("Learning layer initialized (Policy Adapter, Reward Model, Trainer, LearningContract, MemoryGovernance, IntentGate, StreamingPipeline, Observability, EventRecorder, StateMachine, NPCActionBandit, TemporalMemory)")
-    logger.info("World model initialized (retrieval-based, rule-based)")
+    
+    # Load persisted learning state (if available)
+    try:
+        temporal_memory.load()
+        logger.info(f"Loaded temporal memory ({len(temporal_memory)} experiences)")
+    except Exception as e:
+        logger.warning(f"Could not load temporal memory: {e}")
+    
+    # Load persisted emotional states
+    try:
+        emotion_manager = get_emotion_manager()
+        emotion_manager.load()
+        logger.info(f"Loaded emotional states ({len(emotion_manager.list_states())} NPCs)")
+    except Exception as e:
+        logger.warning(f"Could not load emotional states: {e}")
     
     # Swap engines into RuntimeState atomically (Patch 1: atomic engine pointers)
     runtime.swap(RuntimeState(
@@ -401,9 +413,32 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Graceful shutdown"""
+    """Graceful shutdown with learning state persistence"""
     logger.info("Shutting down engines...")
     
+    # Save learning state
+    try:
+        state = runtime.get()
+        
+        # Save temporal memory
+        if state.temporal_memory:
+            state.temporal_memory.save()
+            logger.info("Saved temporal memory")
+        
+        # Save bandit state
+        if state.npc_action_bandit:
+            state.npc_action_bandit.save()
+            logger.info("Saved bandit state")
+        
+        # Save emotional states
+        emotion_manager = get_emotion_manager()
+        emotion_manager.save()
+        logger.info("Saved emotional states")
+        
+    except Exception as e:
+        logger.error(f"Failed to save learning state: {e}")
+    
+    # Shutdown engines
     if tts_engine:
         tts_engine.shutdown()
     if xva_engine:

@@ -462,6 +462,61 @@
                     <div class="affinity-marker"></div>
                     <div class="affinity-fill" id="affinityFill"></div>
                 </div>
+
+                <!-- Emotional State Section -->
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="font-size: 0.9rem; color: var(--text-secondary);">🎭 Emotional State</span>
+                        <span id="emotionTone"
+                            style="padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">neutral</span>
+                    </div>
+
+                    <!-- VAD Bars -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 70px; font-size: 0.75rem; color: var(--text-secondary);">Valence</span>
+                            <div
+                                style="flex: 1; height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden; position: relative;">
+                                <div
+                                    style="position: absolute; left: 50%; width: 1px; height: 100%; background: var(--border);">
+                                </div>
+                                <div id="valenceBar"
+                                    style="position: absolute; height: 100%; background: var(--accent-green); transition: all 0.3s; left: 50%; width: 0;">
+                                </div>
+                            </div>
+                            <span id="valenceVal"
+                                style="width: 40px; font-size: 0.75rem; text-align: right;">0.00</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 70px; font-size: 0.75rem; color: var(--text-secondary);">Arousal</span>
+                            <div
+                                style="flex: 1; height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden;">
+                                <div id="arousalBar"
+                                    style="height: 100%; background: var(--accent-orange); transition: width 0.3s; width: 50%;">
+                                </div>
+                            </div>
+                            <span id="arousalVal"
+                                style="width: 40px; font-size: 0.75rem; text-align: right;">0.50</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span
+                                style="width: 70px; font-size: 0.75rem; color: var(--text-secondary);">Dominance</span>
+                            <div
+                                style="flex: 1; height: 8px; background: var(--bg-hover); border-radius: 4px; overflow: hidden;">
+                                <div id="dominanceBar"
+                                    style="height: 100%; background: var(--accent-blue); transition: width 0.3s; width: 50%;">
+                                </div>
+                            </div>
+                            <span id="dominanceVal"
+                                style="width: 40px; font-size: 0.75rem; text-align: right;">0.50</span>
+                        </div>
+                    </div>
+
+                    <!-- Recent Triggers -->
+                    <div id="emotionTriggers"
+                        style="margin-top: 12px; font-size: 0.7rem; color: var(--text-secondary);"></div>
+                </div>
             </div>
         </div>
 
@@ -662,6 +717,7 @@
             }
 
             updateStateFromAction(action, reward);
+            updateEmotionFromAction(action, positive);
             actionCounts[action] = (actionCounts[action] || 0) + 1;
 
             addLog('action', `Selected: ${action} (simulated)`);
@@ -715,6 +771,111 @@
 
             // Action frequencies
             updateFrequencies();
+
+            // Emotional state
+            updateEmotionUI();
+        }
+
+        // Emotional State Tracking
+        let emotionState = {
+            valence: 0.0,
+            arousal: 0.5,
+            dominance: 0.5,
+            primary_tone: 'neutral',
+            triggers: []
+        };
+
+        function updateEmotionFromAction(action, playerPositive) {
+            // Simulate emotion changes based on action
+            const emotionDeltas = {
+                'AGREE': { v: 0.1, a: 0.0, d: 0.05 },
+                'HELP': { v: 0.15, a: 0.05, d: 0.1 },
+                'INQUIRE': { v: 0.0, a: 0.05, d: 0.0 },
+                'DISAGREE': { v: -0.05, a: 0.05, d: 0.1 },
+                'THREATEN': { v: -0.2, a: 0.25, d: 0.25 },
+                'REFUSE': { v: -0.1, a: 0.05, d: 0.1 },
+                'GREET': { v: 0.05, a: 0.0, d: 0.0 }
+            };
+
+            const delta = emotionDeltas[action] || { v: 0, a: 0, d: 0 };
+            const decay = 0.9;
+
+            emotionState.valence = emotionState.valence * decay + delta.v * (1 - decay);
+            emotionState.arousal = emotionState.arousal * decay + delta.a * (1 - decay);
+            emotionState.dominance = emotionState.dominance * decay + delta.d * (1 - decay);
+
+            // Clamp values
+            emotionState.valence = Math.max(-1, Math.min(1, emotionState.valence));
+            emotionState.arousal = Math.max(0, Math.min(1, emotionState.arousal));
+            emotionState.dominance = Math.max(0, Math.min(1, emotionState.dominance));
+
+            // Derive tone
+            if (emotionState.valence > 0.3 && emotionState.arousal > 0.6) {
+                emotionState.primary_tone = 'enthusiastic';
+            } else if (emotionState.valence > 0.3) {
+                emotionState.primary_tone = 'warm';
+            } else if (emotionState.valence < -0.3 && emotionState.arousal > 0.6) {
+                emotionState.primary_tone = emotionState.dominance > 0.5 ? 'aggressive' : 'defensive';
+            } else if (emotionState.valence < -0.3) {
+                emotionState.primary_tone = 'cold';
+            } else if (emotionState.dominance < 0.3) {
+                emotionState.primary_tone = 'reserved';
+            } else {
+                emotionState.primary_tone = 'neutral';
+            }
+
+            // Track trigger
+            emotionState.triggers.push(`performed ${action}`);
+            emotionState.triggers = emotionState.triggers.slice(-3);
+
+            addLog('temporal', `Emotion: ${emotionState.primary_tone} (v=${emotionState.valence.toFixed(2)})`);
+        }
+
+        function updateEmotionUI() {
+            // Update tone badge
+            const toneEl = document.getElementById('emotionTone');
+            toneEl.textContent = emotionState.primary_tone;
+
+            // Color based on valence
+            if (emotionState.valence > 0.2) {
+                toneEl.style.background = 'rgba(63, 185, 80, 0.15)';
+                toneEl.style.color = 'var(--accent-green)';
+            } else if (emotionState.valence < -0.2) {
+                toneEl.style.background = 'rgba(248, 81, 73, 0.15)';
+                toneEl.style.color = 'var(--accent-red)';
+            } else {
+                toneEl.style.background = 'rgba(163, 113, 247, 0.15)';
+                toneEl.style.color = 'var(--accent-purple)';
+            }
+
+            // Update VAD bars
+            // Valence: centered bar (negative goes left, positive goes right)
+            const valenceBar = document.getElementById('valenceBar');
+            const valencePercent = Math.abs(emotionState.valence) * 50;
+            if (emotionState.valence >= 0) {
+                valenceBar.style.left = '50%';
+                valenceBar.style.width = valencePercent + '%';
+                valenceBar.style.background = 'var(--accent-green)';
+            } else {
+                valenceBar.style.left = (50 - valencePercent) + '%';
+                valenceBar.style.width = valencePercent + '%';
+                valenceBar.style.background = 'var(--accent-red)';
+            }
+            document.getElementById('valenceVal').textContent = emotionState.valence.toFixed(2);
+
+            // Arousal: 0-100%
+            document.getElementById('arousalBar').style.width = (emotionState.arousal * 100) + '%';
+            document.getElementById('arousalVal').textContent = emotionState.arousal.toFixed(2);
+
+            // Dominance: 0-100%
+            document.getElementById('dominanceBar').style.width = (emotionState.dominance * 100) + '%';
+            document.getElementById('dominanceVal').textContent = emotionState.dominance.toFixed(2);
+
+            // Triggers
+            const triggersEl = document.getElementById('emotionTriggers');
+            if (emotionState.triggers.length > 0) {
+                triggersEl.textContent = '📌 ' + emotionState.triggers.join(' → ');
+            }
         }
 
         function updateFrequencies() {
