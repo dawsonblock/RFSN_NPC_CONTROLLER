@@ -1273,6 +1273,85 @@ async def get_status():
     }
 
 
+@app.get("/api/learning/stats")
+async def get_learning_stats():
+    """Get learning statistics for visualization."""
+    npc_action_bandit = runtime.get().npc_action_bandit
+    temporal_memory = runtime.get().temporal_memory
+    
+    stats = {
+        "temporal_memory": {
+            "size": len(temporal_memory) if temporal_memory else 0,
+            "max_size": temporal_memory.max_size if temporal_memory else 0,
+        },
+        "bandit": {
+            "total_arms": 0,
+            "total_updates": 0,
+        }
+    }
+    
+    if npc_action_bandit:
+        total_arms = 0
+        total_updates = 0
+        for key, arms in npc_action_bandit._arms.items():
+            total_arms += len(arms)
+            for arm in arms.values():
+                total_updates += arm.get("n", 0)
+        stats["bandit"]["total_arms"] = total_arms
+        stats["bandit"]["total_updates"] = int(total_updates)
+    
+    return stats
+
+
+@app.get("/api/learning/temporal")
+async def get_temporal_memory():
+    """Get temporal memory contents for visualization."""
+    temporal_memory = runtime.get().temporal_memory
+    
+    if not temporal_memory:
+        return {"experiences": [], "stats": {}}
+    
+    # Get recent experiences (don't expose full state for privacy)
+    experiences = []
+    for exp in list(temporal_memory.memory)[-10:]:  # Last 10
+        experiences.append({
+            "action": exp.action.value,
+            "reward": exp.reward,
+            "age_seconds": (temporal_memory._now() - exp.timestamp)
+        })
+    
+    return {
+        "experiences": experiences,
+        "stats": temporal_memory.stats()
+    }
+
+
+@app.get("/api/learning/bandit")
+async def get_bandit_arms():
+    """Get bandit arm statistics for visualization."""
+    npc_action_bandit = runtime.get().npc_action_bandit
+    
+    if not npc_action_bandit:
+        return {"arms": {}}
+    
+    # Summarize arm stats per context bucket
+    summary = {}
+    for key, arms in npc_action_bandit._arms.items():
+        summary[key] = {}
+        for action, stats in arms.items():
+            n = stats.get("n", 0)
+            if n > 0:
+                alpha = stats.get("alpha", 1)
+                beta = stats.get("beta", 1)
+                mean = alpha / (alpha + beta)
+                summary[key][action] = {
+                    "trials": int(n),
+                    "mean_reward": round(mean, 3)
+                }
+    
+    return {"arms": summary}
+
+
 @app.post("/api/tune-performance", dependencies=[Depends(require_auth)])
 async def tune_performance(settings: PerformanceSettings):
     # Adjust performance settings at runtime

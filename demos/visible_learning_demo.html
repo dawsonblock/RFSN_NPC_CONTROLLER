@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFSN Learning Demo - Visible AI Learning</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-hover: #21262d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-orange: #d29922;
+            --accent-purple: #a371f7;
+            --border: #30363d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header h1 span {
+            color: var(--accent-green);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            background: rgba(63, 185, 80, 0.15);
+            border-radius: 12px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .btn.primary {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+            color: #000;
+        }
+
+        .btn.danger {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+            color: #fff;
+        }
+
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr 1fr;
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: var(--bg-hover);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-body {
+            padding: 16px;
+        }
+
+        /* NPC State Card */
+        .npc-state {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .state-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .state-item {
+            text-align: center;
+        }
+
+        .state-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .state-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .affinity-bar {
+            height: 8px;
+            background: var(--bg-hover);
+            border-radius: 4px;
+            margin-top: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .affinity-fill {
+            height: 100%;
+            transition: width 0.5s, background 0.5s;
+            border-radius: 4px;
+        }
+
+        .affinity-marker {
+            position: absolute;
+            top: -4px;
+            width: 2px;
+            height: 16px;
+            background: var(--text-secondary);
+            left: 50%;
+        }
+
+        /* Chat Card */
+        .chat-card {
+            grid-column: 2;
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 400px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 85%;
+        }
+
+        .message.player {
+            background: var(--accent-blue);
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.npc {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-action {
+            font-size: 0.7rem;
+            color: var(--accent-purple);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .chat-input {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .chat-input input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        /* Action Frequencies Card */
+        .action-freq {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .freq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .freq-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .freq-label {
+            width: 100px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .freq-bar-container {
+            flex: 1;
+            height: 20px;
+            background: var(--bg-hover);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .freq-bar {
+            height: 100%;
+            background: var(--accent-blue);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-size: 0.75rem;
+        }
+
+        /* Learning Graph Card */
+        .learning-graph {
+            grid-column: 1;
+            grid-row: 3;
+        }
+
+        .graph-container {
+            height: 200px;
+            position: relative;
+        }
+
+        .graph-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Event Log Card */
+        .event-log {
+            grid-column: 2;
+            grid-row: 3;
+        }
+
+        .log-list {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 0.8rem;
+        }
+
+        .log-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            width: 60px;
+        }
+
+        .log-type {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .log-type.action {
+            background: rgba(88, 166, 255, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .log-type.reward {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+
+        .log-type.state {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .log-type.temporal {
+            background: rgba(163, 113, 247, 0.2);
+            color: var(--accent-purple);
+        }
+
+        .log-content {
+            flex: 1;
+            color: var(--text-primary);
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .quick-btn {
+            padding: 6px 12px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .quick-btn.positive {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .quick-btn.negative {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        /* Status indicator */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status-dot.offline {
+            background: var(--accent-red);
+            animation: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <h1>
+            🧠 RFSN Visible Learning Demo
+            <span>LIVE</span>
+        </h1>
+        <div class="controls">
+            <div class="status-dot" id="statusDot"></div>
+            <button class="btn" onclick="resetState()">Reset State</button>
+            <button class="btn" onclick="clearLogs()">Clear Logs</button>
+            <button class="btn primary" onclick="autoPlay()">Auto-Play 10 Turns</button>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- NPC State -->
+        <div class="card npc-state">
+            <div class="card-header">
+                <span>🛡️ Guard NPC State</span>
+                <span id="turnCount">Turn 0</span>
+            </div>
+            <div class="card-body">
+                <div class="state-grid">
+                    <div class="state-item">
+                        <div class="state-value" id="affinity">0.00</div>
+                        <div class="state-label">Affinity</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-value" id="relationship">stranger</div>
+                        <div class="state-label">Relationship</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-value" id="mood">neutral</div>
+                        <div class="state-label">Mood</div>
+                    </div>
+                </div>
+                <div class="affinity-bar">
+                    <div class="affinity-marker"></div>
+                    <div class="affinity-fill" id="affinityFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat -->
+        <div class="card chat-card">
+            <div class="card-header">
+                💬 Conversation
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="quick-actions">
+                <button class="quick-btn positive" onclick="sendQuick('Hello friend!')">👋 Greet</button>
+                <button class="quick-btn positive" onclick="sendQuick('You are very helpful!')">🙏 Compliment</button>
+                <button class="quick-btn" onclick="sendQuick('What do you think?')">❓ Ask</button>
+                <button class="quick-btn" onclick="sendQuick('I need your help.')">🤝 Request Help</button>
+                <button class="quick-btn negative" onclick="sendQuick('You are useless!')">😠 Insult</button>
+                <button class="quick-btn negative" onclick="sendQuick('Do as I say or else!')">⚔️ Threaten</button>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="userInput" placeholder="Type a message..."
+                    onkeypress="if(event.key==='Enter')sendMessage()">
+                <button class="btn primary" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Action Frequencies -->
+        <div class="card action-freq">
+            <div class="card-header">
+                📊 Action Frequencies (Learned)
+            </div>
+            <div class="card-body">
+                <div class="freq-list" id="freqList">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Learning Graph -->
+        <div class="card learning-graph">
+            <div class="card-header">
+                📈 Affinity Over Time
+            </div>
+            <div class="card-body">
+                <div class="graph-container">
+                    <canvas id="graphCanvas" class="graph-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card event-log">
+            <div class="card-header">
+                📝 Learning Log
+            </div>
+            <div class="card-body">
+                <div class="log-list" id="logList"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Configuration
+        const API_BASE = '';  // Same origin as server
+        const NPC_NAME = 'Marcus the Guard';
+
+        // State
+        let state = {
+            affinity: 0.0,
+            relationship: 'stranger',
+            mood: 'neutral',
+            trust_level: 0.5,
+            fear_level: 0.0,
+            combat_active: false,
+            quest_active: false,
+            recent_sentiment: 0.0
+        };
+        let turnCount = 0;
+        let affinityHistory = [0];
+        let actionCounts = {};
+        let logs = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUI();
+            drawGraph();
+            checkHealth();
+        });
+
+        // API Health Check
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API_BASE}/api/health`);
+                document.getElementById('statusDot').classList.remove('offline');
+            } catch (e) {
+                document.getElementById('statusDot').classList.add('offline');
+            }
+        }
+
+        // Send message to NPC
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = '';
+
+            addChatMessage('player', message);
+            await chat(message);
+        }
+
+        function sendQuick(message) {
+            document.getElementById('userInput').value = message;
+            sendMessage();
+        }
+
+        async function chat(userInput) {
+            try {
+                const response = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_input: userInput,
+                        npc_name: NPC_NAME,
+                        npc_state: {
+                            npc_name: NPC_NAME,
+                            affinity: state.affinity,
+                            playstyle: 'balanced',
+                            mood: state.mood,
+                            relationship: state.relationship,
+                            combat_active: state.combat_active
+                        },
+                        stream: false
+                    })
+                });
+
+                const data = await response.json();
+
+                turnCount++;
+
+                // Extract action and response
+                const action = data.action || 'UNKNOWN';
+                const npcResponse = data.response || data.text || 'No response';
+                const reward = data.reward || 0.5;
+
+                // Update state based on action
+                updateStateFromAction(action, reward);
+
+                // Log the action
+                addLog('action', `Selected: ${action}`);
+                addLog('reward', `Reward: ${reward.toFixed(2)}`);
+
+                // Track action frequency
+                actionCounts[action] = (actionCounts[action] || 0) + 1;
+
+                // Add NPC response to chat
+                addChatMessage('npc', npcResponse, action);
+
+                // Update UI
+                affinityHistory.push(state.affinity);
+                updateUI();
+                drawGraph();
+
+            } catch (error) {
+                console.error('Chat error:', error);
+                addLog('state', `Error: ${error.message}`);
+
+                // Fallback: simulate locally
+                simulateResponse(userInput);
+            }
+        }
+
+        // Simulate response when API unavailable
+        function simulateResponse(userInput) {
+            turnCount++;
+
+            // Simple sentiment analysis
+            const positive = /hello|thank|please|friend|help|great|good/i.test(userInput);
+            const negative = /insult|hate|stupid|useless|threat|attack/i.test(userInput);
+
+            let action, response, reward;
+
+            if (negative) {
+                action = Math.random() > 0.7 ? 'THREATEN' : 'DISAGREE';
+                response = action === 'THREATEN'
+                    ? "Watch your tongue, traveler. I won't tolerate such disrespect."
+                    : "I don't appreciate your tone. Perhaps you should reconsider your approach.";
+                reward = 0.3;
+                state.affinity = Math.max(-1, state.affinity - 0.15);
+            } else if (positive) {
+                action = Math.random() > 0.5 ? 'AGREE' : 'HELP';
+                response = action === 'AGREE'
+                    ? "Indeed, I agree with you. It's good to meet someone reasonable."
+                    : "Of course, I'd be happy to assist. What do you need?";
+                reward = 0.8;
+                state.affinity = Math.min(1, state.affinity + 0.1);
+            } else {
+                action = 'INQUIRE';
+                response = "Hmm, interesting. What brings you to this part of the kingdom?";
+                reward = 0.5;
+            }
+
+            updateStateFromAction(action, reward);
+            actionCounts[action] = (actionCounts[action] || 0) + 1;
+
+            addLog('action', `Selected: ${action} (simulated)`);
+            addLog('reward', `Reward: ${reward.toFixed(2)}`);
+            addLog('temporal', `Temporal memory recorded`);
+
+            addChatMessage('npc', response, action);
+
+            affinityHistory.push(state.affinity);
+            updateUI();
+            drawGraph();
+        }
+
+        function updateStateFromAction(action, reward) {
+            // Update mood based on recent interactions
+            if (state.affinity > 0.3) {
+                state.mood = 'friendly';
+                state.relationship = state.affinity > 0.6 ? 'friend' : 'acquaintance';
+            } else if (state.affinity < -0.3) {
+                state.mood = 'hostile';
+                state.relationship = state.affinity < -0.6 ? 'enemy' : 'stranger';
+            } else {
+                state.mood = 'neutral';
+                state.relationship = 'stranger';
+            }
+
+            state.recent_sentiment = reward - 0.5;
+
+            addLog('state', `Affinity: ${state.affinity.toFixed(2)}, Mood: ${state.mood}`);
+        }
+
+        // UI Updates
+        function updateUI() {
+            document.getElementById('turnCount').textContent = `Turn ${turnCount}`;
+            document.getElementById('affinity').textContent = state.affinity.toFixed(2);
+            document.getElementById('relationship').textContent = state.relationship;
+            document.getElementById('mood').textContent = state.mood;
+
+            // Affinity bar (0-100% where 50% is neutral)
+            const percentage = (state.affinity + 1) / 2 * 100;
+            const fill = document.getElementById('affinityFill');
+            fill.style.width = percentage + '%';
+
+            if (state.affinity > 0.2) {
+                fill.style.background = 'linear-gradient(90deg, var(--accent-green), #2ea043)';
+            } else if (state.affinity < -0.2) {
+                fill.style.background = 'linear-gradient(90deg, var(--accent-red), #da3633)';
+            } else {
+                fill.style.background = 'linear-gradient(90deg, var(--accent-blue), #388bfd)';
+            }
+
+            // Action frequencies
+            updateFrequencies();
+        }
+
+        function updateFrequencies() {
+            const container = document.getElementById('freqList');
+            const total = Object.values(actionCounts).reduce((a, b) => a + b, 0) || 1;
+
+            const sorted = Object.entries(actionCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6);
+
+            container.innerHTML = sorted.map(([action, count]) => {
+                const pct = (count / total * 100).toFixed(0);
+                return `
+                    <div class="freq-item">
+                        <span class="freq-label">${action}</span>
+                        <div class="freq-bar-container">
+                            <div class="freq-bar" style="width: ${pct}%">${count}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addChatMessage(type, content, action = null) {
+            const container = document.getElementById('chatMessages');
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+
+            if (action) {
+                msg.innerHTML = `<div class="message-action">${action}</div>${content}`;
+            } else {
+                msg.textContent = content;
+            }
+
+            container.appendChild(msg);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addLog(type, content) {
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false }).slice(0, 5);
+            logs.unshift({ time, type, content });
+
+            const container = document.getElementById('logList');
+            container.innerHTML = logs.slice(0, 50).map(log => `
+                <div class="log-entry">
+                    <span class="log-time">${log.time}</span>
+                    <span class="log-type ${log.type}">${log.type}</span>
+                    <span class="log-content">${log.content}</span>
+                </div>
+            `).join('');
+        }
+
+        // Graph
+        function drawGraph() {
+            const canvas = document.getElementById('graphCanvas');
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            const padding = 20;
+
+            // Clear
+            ctx.fillStyle = '#161b22';
+            ctx.fillRect(0, 0, w, h);
+
+            // Draw zero line
+            ctx.strokeStyle = '#30363d';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, h / 2);
+            ctx.lineTo(w - padding, h / 2);
+            ctx.stroke();
+
+            // Draw labels
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '10px sans-serif';
+            ctx.fillText('+1.0', 2, padding);
+            ctx.fillText('0.0', 2, h / 2 + 4);
+            ctx.fillText('-1.0', 2, h - padding + 10);
+
+            if (affinityHistory.length < 2) return;
+
+            // Draw line
+            ctx.strokeStyle = '#58a6ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const points = affinityHistory.slice(-50);  // Last 50 points
+            const xStep = (w - 2 * padding) / Math.max(points.length - 1, 1);
+
+            points.forEach((val, i) => {
+                const x = padding + i * xStep;
+                const y = h / 2 - (val * (h / 2 - padding));
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+
+            ctx.stroke();
+
+            // Draw current point
+            const lastX = padding + (points.length - 1) * xStep;
+            const lastY = h / 2 - (points[points.length - 1] * (h / 2 - padding));
+            ctx.fillStyle = '#58a6ff';
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Controls
+        function resetState() {
+            state = {
+                affinity: 0.0,
+                relationship: 'stranger',
+                mood: 'neutral',
+                trust_level: 0.5,
+                fear_level: 0.0,
+                combat_active: false,
+                quest_active: false,
+                recent_sentiment: 0.0
+            };
+            turnCount = 0;
+            affinityHistory = [0];
+            actionCounts = {};
+            document.getElementById('chatMessages').innerHTML = '';
+            addLog('state', 'State reset');
+            updateUI();
+            drawGraph();
+        }
+
+        function clearLogs() {
+            logs = [];
+            document.getElementById('logList').innerHTML = '';
+        }
+
+        async function autoPlay() {
+            const messages = [
+                "Hello there!",
+                "How are you today?",
+                "I appreciate your help.",
+                "You're doing a great job.",
+                "Thank you for your service.",
+                "Can you help me find something?",
+                "What's happening in the kingdom?",
+                "You seem trustworthy.",
+                "I value our conversation.",
+                "Farewell, friend!"
+            ];
+
+            for (const msg of messages) {
+                addChatMessage('player', msg);
+                await chat(msg);
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        }
+
+        // Resize handler
+        window.addEventListener('resize', drawGraph);
+    </script>
+</body>
+
+</html>
