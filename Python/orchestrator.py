@@ -56,7 +56,7 @@ from learning.learning_contract import (
     LearningUpdate, EvidenceType, WriteGateError
 )
 from memory_governance import MemoryGovernance, GovernedMemory, MemoryType, MemorySource
-from intent_extraction import IntentGate, IntentExtractor, IntentType, SafetyFlag
+from intent_extraction import IntentGate, HybridIntentGate, IntentExtractor, IntentType, SafetyFlag
 from streaming_pipeline import StreamingPipeline, DropPolicy, TimeoutConfig, BoundedQueue, DropPolicy
 from observability import StructuredLogger, MetricsCollector, TraceContext
 from event_recorder import EventRecorder, EventType
@@ -141,7 +141,7 @@ trainer: Optional[Trainer] = None
 learning_contract: Optional[LearningContract] = None
 memory_governance: Optional[MemoryGovernance] = None
 memory_consolidator = None  # MemoryConsolidator instance
-intent_gate: Optional[IntentGate] = None
+intent_gate: Optional[HybridIntentGate] = None
 streaming_pipeline: Optional[StreamingPipeline] = None
 structured_logger: Optional[StructuredLogger] = None
 metrics_collector: Optional[MetricsCollector] = None
@@ -306,11 +306,16 @@ async def startup_event():
 
     memory_consolidator = MemoryConsolidator(memory_governance, llm_generate_fn=_blocking_llm_generate)
     
-    # Initialize IntentGate for LLM output validation
-    intent_gate = IntentGate(
+    # Initialize HybridIntentGate with LLM-powered extraction (Ollama + regex fallback)
+    llm_config = config.get("llm", {})
+    intent_gate = HybridIntentGate(
         block_unsafe=True,
-        require_min_confidence=0.3
+        require_min_confidence=0.3,
+        use_llm=llm_config.get("intent_llm_enabled", True),
+        ollama_host=llm_config.get("ollama_host", "http://localhost:11434"),
+        model=llm_config.get("intent_model", llm_config.get("model", "llama3.2"))
     )
+    logger.info(f"HybridIntentGate initialized (LLM={llm_config.get('intent_llm_enabled', True)})")
     
     # Initialize StreamingPipeline for message delivery guarantees
     # Initialize StreamingPipeline for message delivery guarantees
@@ -872,7 +877,7 @@ async def stream_dialogue(request: DialogueRequest):
                 return text
             
             # Extract intent from the text
-            proposal = intent_gate.extractor.extract(text)
+            proposal = intent_gate._extractor.extract(text)
             
             # Check for harmful safety flags
             harmful_flags = {
