@@ -6,7 +6,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-142%20passing-success.svg)](Python/tests/)
+[![Tests](https://img.shields.io/badge/tests-274%20passing-success.svg)](Python/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-optimized-brightgreen.svg)](Python/)
 
@@ -23,22 +23,26 @@
 ### Core Capabilities
 
 - **🧠 Intelligent Tokenization** - Smart sentence detection with abbreviation handling (Dr., Mr., Jarl)
-- **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (GREET, APOLOGIZE, THREATEN, etc.)
+- **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (32 discrete actions)
 - **🎙️ Real-Time TTS** - Kokoro-ONNX engine with streaming audio playback
+- **💭 LLM Intent Classification** - Hybrid regex+LLM player intent extraction via Ollama
+- **😊 Emotional State System** - VAD-based emotional modeling with decay and persistence
+- **📈 Sentiment Tracking** - Multi-player longitudinal sentiment analysis with trend detection
 - **⚡ Thread-Safe Queue** - Deque+Condition pattern eliminates race conditions
 - **🔒 Atomic Runtime** - Safe hot-reloads without half-applied config
 - **📊 Live Metrics** - WebSocket-based performance monitoring dashboard
-- **💾 Persistent Memory** - Conversation history with automatic backups
-- **🤖 Adaptive Learning** - Contextual bandit learns optimal dialogue styles per NPC
+- **💾 Persistent Memory** - Temporal memory, emotional states, and bandit weights persist across restarts
+- **🤖 Adaptive Learning** - Contextual bandit with adaptive exploration learns optimal dialogue styles
 - **🛡️ Safety Rules** - Hard overrides prevent learned stupidity in combat/trust/quest contexts
+- **📝 Learning Event Logger** - Thread-safe CSV logging for learning diagnostics
 
-### Production Hardening (v9.0)
+### Production Hardening (v10.0)
 
-- ✅ **142 Tests** - Comprehensive coverage including edge cases, learning layer, and world model integration
+- ✅ **274 Tests** - Comprehensive coverage including streaming, learning, world model, and persistence
 - ✅ **Zero Race Conditions** - Deque+Condition queue pattern (no task_done/join bugs)
 - ✅ **Atomic State Swaps** - RuntimeState prevents half-applied config during reloads
-- ✅ **Single TTS Queue** - Unified backpressure (no double-buffering)
-- ✅ **Canonical Versioning** - Single source of truth for version strings
+- ✅ **Full Persistence** - Temporal memory, emotional states, and bandit weights saved on shutdown
+- ✅ **Hybrid NLU** - LLM-powered intent classification with regex fallback
 - ✅ **Safety Rules** - Hard overrides prevent learned stupidity in critical states
 
 ---
@@ -94,7 +98,7 @@ docker run -p 8000:8000 rfsn-orchestrator
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     RFSN Orchestrator v9.0                   │
+│                    RFSN Orchestrator v10.0                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
@@ -109,10 +113,16 @@ docker run -p 8000:8000 rfsn-orchestrator
 │  └──────────────┘    └──────────────┘    └──────────────┘  │
 │         │                    │                               │
 │         ▼                    ▼                               │
-│  ┌──────────────┐    ┌──────────────┐                       │
-│  │  World Model │───▶│Action Scorer │                       │
-│  │  (Prediction)│    │  (Scoring)   │                       │
-│  └──────────────┘    └──────────────┘                       │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │Temporal      │    │  World Model │    │  Emotional   │  │
+│  │  Memory      │───▶│ (Prediction) │◀───│   State      │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│         │                    │                    │          │
+│         ▼                    ▼                    ▼          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │   Bandit     │    │Action Scorer │    │  Sentiment   │  │
+│  │  Learner     │───▶│  (Scoring)   │◀───│   Tracker    │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
 │                                                               │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -126,7 +136,12 @@ docker run -p 8000:8000 rfsn-orchestrator
 | **DequeSpeechQueue** | Thread-safe bounded queue with drop policy | `Python/streaming_voice_system.py` |
 | **World Model** | Predicts state transitions from actions | `Python/world_model.py` |
 | **Action Scorer** | Scores candidate actions using predictions | `Python/action_scorer.py` |
-| **Learning Layer** | Contextual bandit for dialogue style selection | `Python/learning/` |
+| **Temporal Memory** | Short-term experience storage with persistence | `Python/learning/temporal_memory.py` |
+| **Emotional State** | VAD-based emotional modeling with decay | `Python/emotional_tone.py` |
+| **Intent Extraction** | Hybrid LLM+regex player intent classification | `Python/intent_extraction.py` |
+| **Sentiment Tracker** | Multi-player longitudinal sentiment analysis | `Python/learning/sentiment_tracker.py` |
+| **NPC Action Bandit** | Thompson sampling with adaptive exploration | `Python/learning/npc_action_bandit.py` |
+| **Learning Logger** | Thread-safe CSV logging for diagnostics | `Python/learning/event_logger.py` |
 | **Runtime State** | Atomic state management for safe reloads | `Python/runtime_state.py` |
 | **State Machine** | Authoritative state transitions with invariants | `Python/state_machine.py` |
 | **Memory Manager** | Conversation persistence, backups | `Python/memory_manager.py` |
@@ -228,11 +243,12 @@ python -m pytest tests/ -v
 
 ### Test Coverage
 
-- **Core Functionality**: 105 tests
-- **Learning Layer**: 21 tests
-- **World Model Integration**: 3 tests
-- **Edge Cases**: 13 tests
-- **Total**: 142 tests (100% passing)
+- **Core Functionality**: 180+ tests
+- **Learning Layer**: 45+ tests
+- **World Model Integration**: 15+ tests  
+- **Persistence & Recovery**: 20+ tests
+- **Edge Cases**: 14+ tests
+- **Total**: 274 tests (100% passing)
 
 ### Test Categories
 
@@ -732,7 +748,26 @@ RFSN-ORCHESTRATOR/
 
 ## 📈 Changelog
 
-### v9.0 (Latest) - Thread-Safe Queue Rewrite
+### v10.0 (Latest) - Persistence, Emotional States & LLM Intent
+
+**New Features:**
+
+- **Temporal Memory Persistence** - Short-term experiences persist across restarts with 24h expiry
+- **Emotional State Persistence** - VAD emotional states saved with time-based decay on reload
+- **LLM Intent Classification** - Hybrid regex+Ollama intent extraction with graceful fallback
+- **Player Sentiment Tracker** - Longitudinal sentiment analysis with trend detection and volatility
+- **Learning Event Logger** - Thread-safe CSV logging for learning diagnostics
+- **Adaptive Exploration** - Exploration rate decays exponentially from 30% to 2%
+- **Visible Learning Demo** - Enhanced demo with emotional state visualization
+
+**Improvements:**
+
+- 274 tests (was 142) - comprehensive persistence, learning, and world model coverage
+- Orchestrator lifecycle hooks for save/load on shutdown/startup
+- HybridIntentGate replaces IntentGate for nuanced NLU
+- Configurable intent LLM settings in config.json
+
+### v9.0 - Thread-Safe Queue Rewrite
 
 - **Deque+Condition queue** replaces queue.Queue (eliminates race conditions)
 - Removed all task_done/join semantics
