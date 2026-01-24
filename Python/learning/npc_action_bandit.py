@@ -77,6 +77,11 @@ class NPCActionBandit:
     PRIOR_BLEND_MIN = -0.05  # Min bump from scorer priors
     PRIOR_BLEND_MAX = 0.05   # Max bump from scorer priors
     PRIOR_SCALE = 20.0        # Scale factor to normalize scorer values into bump range
+    
+    # Adaptive exploration constants
+    EXPLORE_START = 0.20      # Initial exploration rate (20%)
+    EXPLORE_MIN = 0.02        # Minimum exploration rate (2%)
+    EXPLORE_DECAY_TRIALS = 100  # Trials to reach minimum
 
     def __init__(self, path: Optional[Path] = None, min_trials_before_exploit: int = 3):
         self.path = path or Path("data/learning/npc_action_bandit.json")
@@ -101,13 +106,63 @@ class NPCActionBandit:
         if x > 1.0:
             return 1.0
         return x
+    
+    def get_exploration_rate(self, key: str) -> float:
+        """
+        Calculate adaptive exploration rate for a context.
+        
+        As the bandit gains more experience in a context, exploration decreases.
+        Uses exponential decay from EXPLORE_START to EXPLORE_MIN.
+        
+        Args:
+            key: Context bucket key
+            
+        Returns:
+            Exploration rate between EXPLORE_MIN and EXPLORE_START
+        """
+        if key not in self._arms:
+            return self.EXPLORE_START
+        
+        # Sum total trials across all actions in this context
+        total_trials = sum(arm.get("n", 0) for arm in self._arms[key].values())
+        
+        # Exponential decay: rate = min + (start - min) * exp(-trials / decay_rate)
+        decay_factor = math.exp(-total_trials / self.EXPLORE_DECAY_TRIALS)
+        rate = self.EXPLORE_MIN + (self.EXPLORE_START - self.EXPLORE_MIN) * decay_factor
+        
+        return rate
+    
+    def get_context_stats(self, key: str) -> Dict[str, any]:
+        """Get statistics for a context bucket."""
+        if key not in self._arms:
+            return {"total_trials": 0, "actions": {}, "exploration_rate": self.EXPLORE_START}
+        
+        action_stats = {}
+        for action_name, arm in self._arms[key].items():
+            n = arm.get("n", 0)
+            alpha = arm.get("alpha", 1)
+            beta = arm.get("beta", 1)
+            # Compute mean of Beta distribution
+            mean = alpha / (alpha + beta) if (alpha + beta) > 0 else 0.5
+            action_stats[action_name] = {
+                "trials": n,
+                "mean_reward": round(mean, 3),
+                "alpha": round(alpha, 2),
+                "beta": round(beta, 2)
+            }
+        
+        return {
+            "total_trials": sum(arm.get("n", 0) for arm in self._arms[key].values()),
+            "actions": action_stats,
+            "exploration_rate": round(self.get_exploration_rate(key), 3)
+        }
 
     def select(
         self,
         key: str,
         candidates: List[NPCAction],
         priors: Optional[Dict[NPCAction, float]] = None,
-        explore_bias: float = 0.10,
+        explore_bias: float = None,  # Now optional - uses adaptive rate if None
         temporal_adjustments: Optional[Dict[NPCAction, float]] = None,
     ) -> NPCAction:
         """
@@ -117,7 +172,7 @@ class NPCActionBandit:
             key: Bandit key (context bucket)
             candidates: List of candidate actions
             priors: Optional scorer values (any real number). Used as weak tie-breaker.
-            explore_bias: Chance to pick a random candidate early to avoid lock-in.
+            explore_bias: Exploration rate (if None, uses adaptive rate based on experience)
             temporal_adjustments: Optional adjustments from TemporalMemory.
                 Positive = action worked recently in similar state.
                 Negative = action failed recently in similar state.
@@ -125,8 +180,11 @@ class NPCActionBandit:
         if not candidates:
             raise ValueError("No candidates provided to bandit.select()")
 
-        # early exploration
-        if random.random() < explore_bias:
+        # Use adaptive exploration rate if not explicitly provided
+        actual_explore_rate = explore_bias if explore_bias is not None else self.get_exploration_rate(key)
+        
+        # Early exploration
+        if random.random() < actual_explore_rate:
             return random.choice(candidates)
 
         best_a: Optional[NPCAction] = None
