@@ -108,11 +108,19 @@ class NPCActionBandit:
         candidates: List[NPCAction],
         priors: Optional[Dict[NPCAction, float]] = None,
         explore_bias: float = 0.10,
+        temporal_adjustments: Optional[Dict[NPCAction, float]] = None,
     ) -> NPCAction:
         """
         Select an action among candidates.
-        - priors: optional scorer values (any real number). Used as weak tie-breaker.
-        - explore_bias: chance to pick a random candidate early to avoid lock-in.
+        
+        Args:
+            key: Bandit key (context bucket)
+            candidates: List of candidate actions
+            priors: Optional scorer values (any real number). Used as weak tie-breaker.
+            explore_bias: Chance to pick a random candidate early to avoid lock-in.
+            temporal_adjustments: Optional adjustments from TemporalMemory.
+                Positive = action worked recently in similar state.
+                Negative = action failed recently in similar state.
         """
         if not candidates:
             raise ValueError("No candidates provided to bandit.select()")
@@ -139,12 +147,18 @@ class NPCActionBandit:
                 p = priors[a]
                 bump = max(self.PRIOR_BLEND_MIN, min(self.PRIOR_BLEND_MAX, p / self.PRIOR_SCALE))
 
+            # Temporal intuition: bias based on recent experiences
+            # This is the "anticipation" mechanism - adjust before selection
+            temporal_bump = 0.0
+            if temporal_adjustments and a in temporal_adjustments:
+                temporal_bump = temporal_adjustments[a]  # Already clamped by TemporalMemory
+
             # discourage exploitation if no trials yet
             cold_start_penalty = 0.0
             if n < self.min_trials_before_exploit:
                 cold_start_penalty = -0.03 * (self.min_trials_before_exploit - n)
 
-            score = sample + bump + cold_start_penalty
+            score = sample + bump + temporal_bump + cold_start_penalty
             if score > best_score:
                 best_score = score
                 best_a = a

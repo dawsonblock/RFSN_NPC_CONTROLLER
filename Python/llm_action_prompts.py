@@ -215,6 +215,119 @@ DON'T:
 - Give exposition dumps.
 - Contradict established lore.
 """,
+        # Nuance variants: Agreement
+        NPCAction.AGREE_RELUCTANTLY: """
+ACTION: Agree, but show hesitation.
+DO:
+- Express agreement while showing reluctance or doubt.
+- Use hedging language ("I suppose...", "If you insist...", "Fine, but...").
+DON'T:
+- Sound enthusiastic.
+- Fully commit without reservation.
+""",
+        NPCAction.AGREE_ENTHUSIASTICALLY: """
+ACTION: Agree eagerly and supportively.
+DO:
+- Express enthusiastic agreement.
+- Show excitement or strong support.
+DON'T:
+- Sound reluctant or hesitant.
+- Add conditions or caveats.
+""",
+        # Nuance variants: Refusal
+        NPCAction.REFUSE_POLITELY: """
+ACTION: Decline with courtesy.
+DO:
+- Express refusal gently with a reason.
+- Maintain respect and openness.
+DON'T:
+- Sound harsh or dismissive.
+- Close the door completely.
+""",
+        NPCAction.REFUSE_FIRMLY: """
+ACTION: Decline with no room for negotiation.
+DO:
+- State refusal clearly and finally.
+- Leave no ambiguity.
+DON'T:
+- Apologize excessively.
+- Suggest alternatives.
+""",
+        # Nuance variants: Help
+        NPCAction.HELP_GRUDGINGLY: """
+ACTION: Help, but make it clear this is a favor.
+DO:
+- Agree to help while showing reluctance.
+- Make it clear you're doing them a favor.
+DON'T:
+- Sound happy about it.
+- Offer more than asked.
+""",
+        NPCAction.HELP_EAGERLY: """
+ACTION: Help enthusiastically, go above and beyond.
+DO:
+- Express genuine eagerness to help.
+- Offer additional assistance.
+DON'T:
+- Sound reluctant or conditional.
+- Hold back.
+""",
+        # Nuance variants: Compliance/Warning
+        NPCAction.COMPLY_WITH_HESITATION: """
+ACTION: Accept while showing uncertainty.
+DO:
+- Accept but express doubt or concern.
+- Show you're not fully convinced.
+DON'T:
+- Sound confident.
+- Pretend you're comfortable with it.
+""",
+        NPCAction.WARN_STERNLY: """
+ACTION: Warn of consequences without explicit threat.
+DO:
+- Caution firmly about risks or outcomes.
+- Sound serious without being hostile.
+DON'T:
+- Make explicit threats.
+- Sound aggressive.
+""",
+        # Nuance variants: Subtle interactions
+        NPCAction.DEFLECT: """
+ACTION: Acknowledge but redirect the conversation.
+DO:
+- Acknowledge what was said briefly.
+- Steer to a different topic.
+DON'T:
+- Ignore completely.
+- Engage deeply with the original topic.
+""",
+        NPCAction.PROBE: """
+ACTION: Ask probing questions to uncover intent.
+DO:
+- Ask subtle questions to learn more.
+- Show curiosity about their motives.
+DON'T:
+- Interrogate aggressively.
+- Accept surface-level answers.
+""",
+        NPCAction.CONFIDE: """
+ACTION: Share personal or vulnerable information.
+DO:
+- Reveal something personal or sensitive.
+- Show trust or vulnerability.
+DON'T:
+- Overshare dramatically.
+- Sound manipulative.
+""",
+        NPCAction.HINT: """
+ACTION: Suggest indirectly without stating outright.
+DO:
+- Imply meaning without explicit statement.
+- Leave room for interpretation.
+DON'T:
+- State things directly.
+- Be too cryptic to understand.
+""",
     }
 
     body = ACTIONS.get(

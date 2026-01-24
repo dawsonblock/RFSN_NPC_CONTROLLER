@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class NPCAction(Enum):
     """Discrete set of NPC actions for world model learning"""
+    # Core actions (20)
     GREET = "greet"
     FAREWELL = "farewell"
     AGREE = "agree"
@@ -35,6 +36,67 @@ class NPCAction(Enum):
     IGNORE = "ignore"
     INQUIRE = "inquire"
     EXPLAIN = "explain"
+    
+    # Nuance variants (12) - preserve authority separation while enabling subtler behavior
+    # Agreement variants
+    AGREE_RELUCTANTLY = "agree_reluctantly"         # Agree but show hesitation
+    AGREE_ENTHUSIASTICALLY = "agree_enthusiastically"  # Agree eagerly
+    
+    # Refusal variants
+    REFUSE_POLITELY = "refuse_politely"             # Decline with courtesy
+    REFUSE_FIRMLY = "refuse_firmly"                 # Decline with no room for negotiation
+    
+    # Help variants
+    HELP_GRUDGINGLY = "help_grudgingly"             # Help as a favor, not eagerly
+    HELP_EAGERLY = "help_eagerly"                   # Help enthusiastically
+    
+    # Compliance/warning variants
+    COMPLY_WITH_HESITATION = "comply_with_hesitation"  # Accept while showing uncertainty
+    WARN_STERNLY = "warn_sternly"                   # Warn without explicit threat
+    
+    # Subtle interaction variants
+    DEFLECT = "deflect"                             # Acknowledge but redirect
+    PROBE = "probe"                                 # Ask probing questions
+    CONFIDE = "confide"                             # Share personal/vulnerable info
+    HINT = "hint"                                   # Suggest indirectly
+    
+    @classmethod
+    def get_base_action(cls, action: 'NPCAction') -> 'NPCAction':
+        """Get the base action for a nuance variant."""
+        base_map = {
+            cls.AGREE_RELUCTANTLY: cls.AGREE,
+            cls.AGREE_ENTHUSIASTICALLY: cls.AGREE,
+            cls.REFUSE_POLITELY: cls.REFUSE,
+            cls.REFUSE_FIRMLY: cls.REFUSE,
+            cls.HELP_GRUDGINGLY: cls.HELP,
+            cls.HELP_EAGERLY: cls.HELP,
+            cls.COMPLY_WITH_HESITATION: cls.ACCEPT,
+            cls.WARN_STERNLY: cls.THREATEN,
+            cls.DEFLECT: cls.IGNORE,
+            cls.PROBE: cls.INQUIRE,
+            cls.CONFIDE: cls.EXPLAIN,
+            cls.HINT: cls.EXPLAIN,
+        }
+        return base_map.get(action, action)
+    
+    @classmethod
+    def get_nuance_variants(cls, base_action: 'NPCAction') -> list['NPCAction']:
+        """Get all nuance variants for a base action."""
+        variants_map = {
+            cls.AGREE: [cls.AGREE_RELUCTANTLY, cls.AGREE_ENTHUSIASTICALLY],
+            cls.REFUSE: [cls.REFUSE_POLITELY, cls.REFUSE_FIRMLY],
+            cls.HELP: [cls.HELP_GRUDGINGLY, cls.HELP_EAGERLY],
+            cls.ACCEPT: [cls.COMPLY_WITH_HESITATION],
+            cls.THREATEN: [cls.WARN_STERNLY],
+            cls.IGNORE: [cls.DEFLECT],
+            cls.INQUIRE: [cls.PROBE],
+            cls.EXPLAIN: [cls.CONFIDE, cls.HINT],
+        }
+        return variants_map.get(base_action, [])
+    
+    def is_nuance_variant(self) -> bool:
+        """Check if this action is a nuance variant."""
+        return self != NPCAction.get_base_action(self)
 
 
 class PlayerSignal(Enum):

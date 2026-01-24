@@ -126,16 +126,19 @@ class ActionScorer:
     """
     
     def __init__(self, world_model: WorldModel,
-                 utility_fn: Optional[UtilityFunction] = None):
+                 utility_fn: Optional[UtilityFunction] = None,
+                 nuance_threshold: float = 6.0):
         """
         Initialize action scorer
         
         Args:
             world_model: World model for predictions
             utility_fn: Utility function (creates default if None)
+            nuance_threshold: Score threshold above which to expand with nuance variants
         """
         self.world_model = world_model
         self.utility_fn = utility_fn or UtilityFunction()
+        self.nuance_threshold = nuance_threshold
         
         # Default candidate actions
         self.default_candidates = [
@@ -162,6 +165,54 @@ class ActionScorer:
         ]
         
         logger.info("ActionScorer initialized")
+    
+    def expand_with_nuance_variants(
+        self,
+        scores: List[ActionScore],
+        current_state: StateSnapshot,
+        player_signal: PlayerSignal
+    ) -> List[ActionScore]:
+        """
+        Expand high-scoring base actions with nuance variants.
+        
+        For each base action scoring above nuance_threshold, add
+        nuance variants to enable subtler behavior.
+        
+        Args:
+            scores: Scored actions
+            current_state: Current NPC state
+            player_signal: Player signal
+            
+        Returns:
+            Expanded list of ActionScores including nuance variants
+        """
+        expanded = list(scores)
+        
+        for action_score in scores:
+            if action_score.total_score < self.nuance_threshold:
+                continue
+            
+            # Get nuance variants for this action
+            variants = NPCAction.get_nuance_variants(action_score.action)
+            if not variants:
+                continue
+            
+            # Select appropriate variant based on state
+            for variant in variants:
+                # Score the variant (inherits from base prediction)
+                try:
+                    variant_score = self.score_action(
+                        current_state, variant, player_signal
+                    )
+                    # Slightly boost variants over base for nuanced behavior
+                    # But not so much that they always win
+                    expanded.append(variant_score)
+                except Exception as e:
+                    logger.debug(f"Failed to score nuance variant {variant.value}: {e}")
+        
+        # Re-sort by score
+        expanded.sort(key=lambda s: s.total_score, reverse=True)
+        return expanded
     
     def propose_candidates(self, current_state: StateSnapshot,
                           player_signal: PlayerSignal,
