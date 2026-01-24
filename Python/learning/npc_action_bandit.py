@@ -41,9 +41,9 @@ class BanditKey:
             r_bucket = "neutral"
             
         # Threat bucket
-        # armed if weapon drawn (WEAPON_DRAWN, ATTACKING) vs unarmed (WEAPON_LOWERED, HOLSTERED, NEUTRAL)
+        # armed if aggression detected (ATTACK, THREATEN) vs unarmed (others)
         t_bucket = "unarmed"
-        if sig in (PlayerSignal.WEAPON_DRAWN, PlayerSignal.ATTACKING, PlayerSignal.CASTING):
+        if sig in (PlayerSignal.ATTACK, PlayerSignal.THREATEN):
             t_bucket = "armed"
 
         return cls(

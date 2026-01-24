@@ -14,7 +14,7 @@ Each action subprompt includes:
 """
 from typing import Dict, Any
 
-from ..world_model import NPCAction, PlayerSignal, StateSnapshot
+from world_model import NPCAction, PlayerSignal, StateSnapshot
 def _determine_mode(state: StateSnapshot) -> str:
     """Determine the current interaction mode from state."""
     if state.combat_active:

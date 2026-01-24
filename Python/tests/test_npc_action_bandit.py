@@ -14,13 +14,29 @@ from world_model import NPCAction, PlayerSignal, StateSnapshot
 class TestBanditKey:
     """Test BanditKey bucketing logic"""
     
-    def test_affinity_bands(self):
-        """Test affinity is bucketed into bands"""
-        assert BanditKey._affinity_band(-0.8) == "very_neg"
-        assert BanditKey._affinity_band(-0.4) == "neg"
-        assert BanditKey._affinity_band(0.0) == "neutral"
-        assert BanditKey._affinity_band(0.4) == "pos"
-        assert BanditKey._affinity_band(0.8) == "very_pos"
+    def test_relationship_bucketing(self):
+        """Test affinity is bucketed into relationship bands"""
+        # The actual BanditKey.from_state uses: hostile (<= -0.2), neutral, friendly (>= 0.2)
+        state_hostile = StateSnapshot(
+            mood="angry", affinity=-0.5, relationship="enemy",
+            recent_sentiment=-0.3, combat_active=False
+        )
+        state_neutral = StateSnapshot(
+            mood="neutral", affinity=0.0, relationship="stranger",
+            recent_sentiment=0.0, combat_active=False
+        )
+        state_friendly = StateSnapshot(
+            mood="happy", affinity=0.5, relationship="friend",
+            recent_sentiment=0.3, combat_active=False
+        )
+        
+        key_hostile = BanditKey.from_state(state_hostile, PlayerSignal.GREET)
+        key_neutral = BanditKey.from_state(state_neutral, PlayerSignal.GREET)
+        key_friendly = BanditKey.from_state(state_friendly, PlayerSignal.GREET)
+        
+        assert key_hostile.relationship_bucket == "hostile"
+        assert key_neutral.relationship_bucket == "neutral"
+        assert key_friendly.relationship_bucket == "friendly"
     
     def test_from_state(self):
         """Test creating BanditKey from StateSnapshot"""
@@ -35,26 +51,21 @@ class TestBanditKey:
         
         key = BanditKey.from_state(state, PlayerSignal.GREET)
         
-        assert key.mood == "happy"
-        assert key.relationship == "friend"
-        assert key.affinity_band == "pos"
-        assert key.player_signal == "greet"
-        assert key.combat == False
-        assert key.quest == True
+        # Actual BanditKey has these fields
+        assert key.combat_bucket == "social"  # combat_active=False
+        assert key.relationship_bucket == "friendly"  # affinity=0.5 >= 0.2
+        assert key.threat_bucket == "unarmed"  # GREET is not aggressive
     
     def test_to_str(self):
         """Test key serialization"""
         key = BanditKey(
-            mood="neutral",
-            relationship="stranger",
-            affinity_band="neutral",
-            player_signal="question",
-            combat=False,
-            quest=False
+            combat_bucket="social",
+            relationship_bucket="neutral",
+            threat_bucket="unarmed"
         )
         
         key_str = key.to_str()
-        assert key_str == "neutral|stranger|neutral|question|no_combat|no_quest"
+        assert key_str == "social:neutral:unarmed"
 
 
 class TestNPCActionBandit:
