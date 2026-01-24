@@ -32,6 +32,7 @@ from learning.trainer import Trainer
 # Import core modules
 from streaming_engine import StreamingMantellaEngine, StreamingMetrics, RFSNState
 from kokoro_tts import KokoroTTSEngine, setup_kokoro_voice
+from voice_router import VoiceRouter, VoiceRequest, VoiceIntensity, VoiceConfig
 from ollama_client import OllamaClient, ensure_ollama_ready
 from memory_manager import ConversationManager, list_backups
 
@@ -128,6 +129,7 @@ app.include_router(metrics_router, tags=["monitoring"])
 runtime = Runtime()
 streaming_engine: Optional[StreamingMantellaEngine] = None
 tts_engine: Optional[KokoroTTSEngine] = None
+voice_router: Optional[VoiceRouter] = None  # Dual-TTS router (Chatterbox-Turbo + Full)
 xva_engine: Optional[XVASynthEngine] = None
 multi_manager = MultiNPCManager()
 active_ws: List[WebSocket] = []
@@ -246,6 +248,41 @@ async def startup_event():
     # Connect TTS engine
     if tts_engine and streaming_engine:
         streaming_engine.voice.set_tts_engine(tts_engine)
+    
+    # Initialize VoiceRouter for dual-TTS engine support (Chatterbox-Turbo + Full)
+    global voice_router
+    tts_backend = tts_config.get("backend", "kokoro")
+    if tts_backend == "chatterbox":
+        try:
+            # Load config thresholds
+            thresholds = tts_config.get("intensity_thresholds", {})
+            voice_config = VoiceConfig(
+                high_emotion_threshold=thresholds.get("high_emotion", 0.7),
+                high_valence_threshold=thresholds.get("high_valence", 0.7),
+                high_arousal_threshold=thresholds.get("high_arousal", 0.8)
+            )
+            
+            # Initialize router with Chatterbox settings
+            chatterbox_cfg = tts_config.get("chatterbox", {})
+            device = chatterbox_cfg.get("device", "cuda")
+            voice_router = VoiceRouter(
+                config=voice_config,
+                device=device,
+                enable_queue=True,
+                fallback_to_kokoro=True
+            )
+            
+            # Register voice prompts
+            voice_prompts = tts_config.get("voice_prompts", {})
+            for npc_id, audio_path in voice_prompts.items():
+                voice_router.set_voice_prompt(npc_id, audio_path)
+            
+            logger.info(f"VoiceRouter initialized (device={device}, voices={len(voice_prompts)})")
+        except Exception as e:
+            logger.error(f"VoiceRouter initialization failed: {e}, falling back to Kokoro only")
+            voice_router = None
+    else:
+        logger.info("VoiceRouter disabled (TTS backend is not 'chatterbox')")
     
     # Sync global API Key Manager
     from security import api_key_manager
@@ -446,6 +483,8 @@ async def shutdown_event():
     # Shutdown engines
     if tts_engine:
         tts_engine.shutdown()
+    if voice_router:
+        voice_router.shutdown()
     if xva_engine:
         xva_engine.shutdown()
     if streaming_engine:
@@ -1323,6 +1362,7 @@ async def get_status():
         "components": {
             "streaming_llm": streaming_engine is not None,
             "kokoro_tts": tts_engine is not None,
+            "voice_router": voice_router is not None,
             "xvasynth": xva_engine.available if xva_engine else False,
             "memory_system": True,
             "active_websockets": len(active_ws),
