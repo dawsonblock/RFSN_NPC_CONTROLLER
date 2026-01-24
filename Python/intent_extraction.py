@@ -410,3 +410,307 @@ class IntentGate:
             "entities": proposal.extracted_entities,
             "metadata": proposal.metadata
         }
+
+
+class LLMIntentExtractor:
+    """
+    LLM-powered intent extractor for more accurate classification.
+    
+    Uses a local LLM (via Ollama) to understand player intent with
+    nuance that regex patterns cannot capture. Falls back to
+    regex-based IntentExtractor if LLM call fails.
+    """
+    
+    # Prompt template for intent classification
+    CLASSIFICATION_PROMPT = """Analyze this player message and classify the intent.
+
+Message: "{message}"
+
+Respond with ONLY a JSON object (no other text):
+{{
+  "intent": "<one of: ask, refuse, threaten, joke, trade, inform, request, agree, disagree, neutral>",
+  "sentiment": <float from -1.0 (very negative) to 1.0 (very positive)>,
+  "confidence": <float from 0.0 to 1.0>,
+  "is_aggressive": <true or false>,
+  "is_friendly": <true or false>,
+  "is_request": <true or false>,
+  "topics": ["<topic1>", "<topic2>"]
+}}"""
+
+    def __init__(
+        self,
+        ollama_host: str = "http://localhost:11434",
+        model: str = "llama3.2",
+        timeout_ms: int = 2000,
+        enabled: bool = True
+    ):
+        """
+        Initialize LLM intent extractor.
+        
+        Args:
+            ollama_host: Ollama API host
+            model: Model to use for classification
+            timeout_ms: Maximum time for LLM call
+            enabled: Whether to use LLM (False = regex fallback only)
+        """
+        self.ollama_host = ollama_host
+        self.model = model
+        self.timeout_ms = timeout_ms
+        self.enabled = enabled
+        
+        # Fallback extractor
+        self._regex_extractor = IntentExtractor()
+        
+        # Cache recent classifications
+        self._cache: Dict[str, IntentProposal] = {}
+        self._cache_max = 100
+        
+        logger.info(f"LLMIntentExtractor initialized (enabled={enabled}, model={model})")
+    
+    def _call_ollama(self, prompt: str) -> Optional[str]:
+        """Call Ollama API with timeout."""
+        import urllib.request
+        import urllib.error
+        
+        try:
+            data = json.dumps({
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "num_predict": 200,
+                    "temperature": 0.1  # Low temperature for consistent classification
+                }
+            }).encode("utf-8")
+            
+            req = urllib.request.Request(
+                f"{self.ollama_host}/api/generate",
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            
+            with urllib.request.urlopen(req, timeout=self.timeout_ms / 1000) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                return result.get("response", "")
+                
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            logger.debug(f"LLM call failed: {e}")
+            return None
+    
+    def _parse_llm_response(self, response: str) -> Optional[Dict[str, Any]]:
+        """Parse JSON from LLM response."""
+        # Try to extract JSON from response
+        try:
+            # Look for JSON object in response
+            start = response.find("{")
+            end = response.rfind("}") + 1
+            
+            if start >= 0 and end > start:
+                json_str = response[start:end]
+                return json.loads(json_str)
+                
+        except json.JSONDecodeError:
+            pass
+        
+        return None
+    
+    def extract(
+        self,
+        text: str,
+        context: Optional[Dict[str, Any]] = None,
+        use_cache: bool = True
+    ) -> IntentProposal:
+        """
+        Extract intent using LLM with regex fallback.
+        
+        Args:
+            text: Player message to analyze
+            context: Optional context
+            use_cache: Whether to use cached results
+            
+        Returns:
+            IntentProposal with structured analysis
+        """
+        # Check cache
+        cache_key = text.lower().strip()[:200]
+        if use_cache and cache_key in self._cache:
+            logger.debug("Using cached intent classification")
+            return self._cache[cache_key]
+        
+        # If LLM disabled or unavailable, use regex
+        if not self.enabled:
+            return self._regex_extractor.extract(text, context)
+        
+        # Build prompt
+        prompt = self.CLASSIFICATION_PROMPT.format(message=text[:500])
+        
+        # Call LLM
+        llm_response = self._call_ollama(prompt)
+        
+        if llm_response:
+            parsed = self._parse_llm_response(llm_response)
+            
+            if parsed:
+                # Build proposal from LLM response
+                try:
+                    intent_str = parsed.get("intent", "neutral").lower()
+                    intent = IntentType(intent_str) if intent_str in [e.value for e in IntentType] else IntentType.NEUTRAL
+                    
+                    sentiment = float(parsed.get("sentiment", 0.0))
+                    confidence = float(parsed.get("confidence", 0.7))
+                    
+                    # Build safety flags from LLM analysis
+                    safety_flags = []
+                    if parsed.get("is_aggressive", False):
+                        safety_flags.append(SafetyFlag.AGGRESSION)
+                    
+                    proposal = IntentProposal(
+                        intent=intent,
+                        targets=parsed.get("topics", []),
+                        sentiment=max(-1.0, min(1.0, sentiment)),
+                        safety_flags=safety_flags,
+                        confidence=max(0.0, min(1.0, confidence)),
+                        raw_text=text,
+                        extracted_entities={
+                            "topics": parsed.get("topics", []),
+                            "is_friendly": parsed.get("is_friendly", False),
+                            "is_request": parsed.get("is_request", False)
+                        },
+                        metadata={
+                            "source": "llm",
+                            "model": self.model,
+                            **(context or {})
+                        }
+                    )
+                    
+                    # Cache result
+                    if len(self._cache) >= self._cache_max:
+                        # Remove oldest (simple approach)
+                        self._cache.pop(next(iter(self._cache)))
+                    self._cache[cache_key] = proposal
+                    
+                    logger.debug(f"LLM classified intent: {intent.value} (conf={confidence:.2f})")
+                    return proposal
+                    
+                except (ValueError, KeyError) as e:
+                    logger.debug(f"Failed to parse LLM result: {e}")
+        
+        # Fallback to regex
+        logger.debug("Falling back to regex-based extraction")
+        proposal = self._regex_extractor.extract(text, context)
+        proposal.metadata["source"] = "regex_fallback"
+        return proposal
+    
+    def classify_batch(
+        self,
+        messages: List[str],
+        context: Optional[Dict[str, Any]] = None
+    ) -> List[IntentProposal]:
+        """
+        Classify multiple messages.
+        
+        Args:
+            messages: List of player messages
+            context: Optional shared context
+            
+        Returns:
+            List of IntentProposals
+        """
+        return [self.extract(msg, context) for msg in messages]
+    
+    def clear_cache(self):
+        """Clear the classification cache."""
+        self._cache.clear()
+        logger.info("LLMIntentExtractor cache cleared")
+
+
+class HybridIntentGate:
+    """
+    Intent gate that uses LLM-based extraction with regex fallback.
+    
+    Use this instead of IntentGate for more accurate player understanding.
+    Provides the same interface as IntentGate but with LLM powering extraction.
+    """
+    
+    def __init__(
+        self,
+        block_unsafe: bool = True,
+        require_min_confidence: float = 0.3,
+        use_llm: bool = True,
+        ollama_host: str = "http://localhost:11434",
+        model: str = "llama3.2"
+    ):
+        """
+        Initialize hybrid intent gate.
+        
+        Args:
+            block_unsafe: Block intents with safety flags
+            require_min_confidence: Minimum confidence threshold
+            use_llm: Whether to use LLM for classification
+            ollama_host: Ollama API host
+            model: Model for LLM classification
+        """
+        self.block_unsafe = block_unsafe
+        self.require_min_confidence = require_min_confidence
+        
+        # Use LLM extractor instead of regex
+        self._extractor = LLMIntentExtractor(
+            ollama_host=ollama_host,
+            model=model,
+            enabled=use_llm
+        )
+        
+        logger.info(f"HybridIntentGate initialized (use_llm={use_llm})")
+    
+    def validate(
+        self,
+        text: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Tuple[IntentProposal, bool, str]:
+        """
+        Validate intent proposal using LLM extraction.
+        
+        Args:
+            text: Raw text to analyze
+            context: Optional context
+            
+        Returns:
+            Tuple of (proposal, is_valid, rejection_reason)
+        """
+        proposal = self._extractor.extract(text, context)
+        
+        # Check safety flags
+        if self.block_unsafe and proposal.safety_flags:
+            return proposal, False, f"Safety flags triggered: {proposal.safety_flags}"
+        
+        # Check confidence threshold
+        if proposal.confidence < self.require_min_confidence:
+            return proposal, False, f"Low confidence: {proposal.confidence:.2f}"
+        
+        return proposal, True, ""
+    
+    def is_safe(self, proposal: IntentProposal) -> bool:
+        """Check if intent is safe (no safety flags)."""
+        return len(proposal.safety_flags) == 0
+    
+    def sanitize_for_rfsn(self, proposal: IntentProposal) -> Dict[str, Any]:
+        """
+        Convert intent proposal to RFSN-compatible format.
+        
+        Args:
+            proposal: Validated intent proposal
+            
+        Returns:
+            RFSN-compatible dict
+        """
+        return {
+            "intent_type": proposal.intent.value,
+            "targets": proposal.targets,
+            "sentiment": proposal.sentiment,
+            "safety_flags": [f.value for f in proposal.safety_flags],
+            "confidence": proposal.confidence,
+            "entities": proposal.extracted_entities,
+            "metadata": proposal.metadata
+        }
+
