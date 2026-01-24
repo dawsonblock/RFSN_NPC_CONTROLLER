@@ -306,5 +306,152 @@ class TestVoiceRequest:
         assert request.voice_prompt_path is None
 
 
+class TestAudioCache:
+    """Test AudioCache LRU cache with TTL"""
+    
+    def test_cache_put_and_get(self):
+        """Cache stores and retrieves audio"""
+        from voice_router import AudioCache
+        cache = AudioCache(max_size=10, ttl_seconds=60.0)
+        
+        cache.put("hello", "npc1", VoiceIntensity.LOW, 0.3, b"audio_data")
+        result = cache.get("hello", "npc1", VoiceIntensity.LOW, 0.3)
+        
+        assert result == b"audio_data"
+    
+    def test_cache_miss(self):
+        """Cache returns None for missing entries"""
+        from voice_router import AudioCache
+        cache = AudioCache(max_size=10, ttl_seconds=60.0)
+        
+        result = cache.get("nonexistent", "npc1", VoiceIntensity.LOW, 0.3)
+        assert result is None
+    
+    def test_cache_eviction(self):
+        """Cache evicts oldest entries when at capacity"""
+        from voice_router import AudioCache
+        cache = AudioCache(max_size=2, ttl_seconds=60.0)
+        
+        cache.put("first", "npc1", VoiceIntensity.LOW, 0.3, b"first")
+        cache.put("second", "npc1", VoiceIntensity.LOW, 0.3, b"second")
+        cache.put("third", "npc1", VoiceIntensity.LOW, 0.3, b"third")
+        
+        # First should be evicted
+        assert cache.get("first", "npc1", VoiceIntensity.LOW, 0.3) is None
+        assert cache.get("second", "npc1", VoiceIntensity.LOW, 0.3) == b"second"
+        assert cache.get("third", "npc1", VoiceIntensity.LOW, 0.3) == b"third"
+    
+    def test_cache_stats(self):
+        """Cache tracks hit/miss statistics"""
+        from voice_router import AudioCache
+        cache = AudioCache(max_size=10, ttl_seconds=60.0)
+        
+        cache.put("hello", "npc1", VoiceIntensity.LOW, 0.3, b"data")
+        cache.get("hello", "npc1", VoiceIntensity.LOW, 0.3)  # hit
+        cache.get("miss", "npc1", VoiceIntensity.LOW, 0.3)   # miss
+        
+        stats = cache.get_stats()
+        assert stats["hits"] == 1
+        assert stats["misses"] == 1
+        assert stats["hit_rate"] == "50.0%"
+
+
+class TestIntensityCache:
+    """Test IntensityCache precomputation"""
+    
+    def test_intensity_cache_hit(self):
+        """Intensity cache returns cached value"""
+        from voice_router import IntensityCache
+        cache = IntensityCache(ttl_seconds=60.0)
+        
+        state = EmotionalState(intensity=0.5)
+        request = VoiceRequest(text="test", npc_id="npc1", emotional_state=state)
+        
+        cache.put(request, VoiceIntensity.MEDIUM)
+        result = cache.get(request)
+        
+        assert result == VoiceIntensity.MEDIUM
+    
+    def test_intensity_cache_miss(self):
+        """Intensity cache returns None for new requests"""
+        from voice_router import IntensityCache
+        cache = IntensityCache(ttl_seconds=60.0)
+        
+        state = EmotionalState(intensity=0.5)
+        request = VoiceRequest(text="test", npc_id="npc1", emotional_state=state)
+        
+        result = cache.get(request)
+        assert result is None
+    
+    def test_intensity_force_override_skips_cache(self):
+        """Force intensity returns immediately without cache lookup"""
+        from voice_router import IntensityCache
+        cache = IntensityCache(ttl_seconds=60.0)
+        
+        state = EmotionalState(intensity=0.5)
+        request = VoiceRequest(
+            text="test", 
+            npc_id="npc1", 
+            emotional_state=state,
+            force_intensity=VoiceIntensity.HIGH
+        )
+        
+        # Should return force_intensity immediately
+        result = cache.get(request)
+        assert result == VoiceIntensity.HIGH
+
+
+class TestVoiceRouterOptimizations:
+    """Test VoiceRouter optimization features"""
+    
+    @pytest.fixture
+    def optimized_router(self):
+        """Create router with all optimizations enabled"""
+        config = VoiceConfig(
+            cache_enabled=True,
+            cache_max_size=50,
+            lazy_load_full_model=True,
+            intensity_cache_ttl=5.0
+        )
+        with patch('voice_router.VoiceRouter._init_engines'):
+            router = VoiceRouter(config=config)
+            router._using_fallback = True
+            router._full_model_loaded = False
+            return router
+    
+    def test_lazy_load_not_triggered_for_low(self, optimized_router):
+        """Full model not loaded for LOW intensity requests"""
+        optimized_router.turbo_engine = MagicMock()
+        optimized_router.turbo_engine.speak = MagicMock(return_value=True)
+        
+        state = EmotionalState(intensity=0.3)
+        request = VoiceRequest(text="Low", npc_id="guard", emotional_state=state)
+        
+        optimized_router.route(request)
+        
+        # Full model should NOT be loaded
+        assert not optimized_router._full_model_loaded
+    
+    def test_stats_include_cache_info(self, optimized_router):
+        """Stats include audio cache information"""
+        stats = optimized_router.get_stats()
+        
+        assert "audio_cache" in stats
+        assert "hits" in stats["audio_cache"]
+        assert "hit_rate" in stats["audio_cache"]
+    
+    def test_clear_cache(self, optimized_router):
+        """clear_cache clears both caches"""
+        # Add something to intensity cache
+        state = EmotionalState(intensity=0.5)
+        request = VoiceRequest(text="test", npc_id="npc1", emotional_state=state)
+        optimized_router._intensity_cache.put(request, VoiceIntensity.MEDIUM)
+        
+        optimized_router.clear_cache()
+        
+        # Cache should be empty
+        assert optimized_router._intensity_cache.get(request) is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
