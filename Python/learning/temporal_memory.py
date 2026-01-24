@@ -12,6 +12,7 @@ import time
 import math
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, Optional, List, Deque
 import logging
 
@@ -211,3 +212,96 @@ class TemporalMemory:
             "oldest_age_s": time.time() - oldest,
             "action_counts": action_counts
         }
+    
+    def save(self, path: Optional[Path] = None) -> None:
+        """
+        Persist experiences to disk.
+        
+        Args:
+            path: Optional save path (defaults to data/learning/temporal_memory.json)
+        """
+        import json
+        save_path = path or Path("data/learning/temporal_memory.json")
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        data = {
+            "experiences": [
+                {
+                    "state": exp.state.to_dict(),
+                    "action": exp.action.value,
+                    "reward": exp.reward,
+                    "timestamp": exp.timestamp
+                }
+                for exp in self.experiences
+            ],
+            "config": {
+                "max_size": self.experiences.maxlen,
+                "decay_rate": self.decay_rate,
+                "adjustment_scale": self.adjustment_scale,
+                "similarity_threshold": self.similarity_threshold
+            }
+        }
+        
+        # Atomic write: save to .tmp, then rename
+        tmp_path = save_path.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        
+        import os
+        os.replace(tmp_path, save_path)
+        logger.info(f"[TemporalMemory] Saved {len(self.experiences)} experiences to {save_path}")
+    
+    def load(self, path: Optional[Path] = None) -> None:
+        """
+        Load experiences from disk.
+        
+        Args:
+            path: Optional load path (defaults to data/learning/temporal_memory.json)
+        """
+        import json
+        load_path = path or Path("data/learning/temporal_memory.json")
+        
+        # Attempt recovery from .tmp file
+        tmp_path = load_path.with_suffix(".json.tmp")
+        if not load_path.exists() and tmp_path.exists():
+            import os
+            os.replace(tmp_path, load_path)
+            logger.warning(f"[TemporalMemory] Recovered from {tmp_path}")
+        
+        if not load_path.exists():
+            logger.info(f"[TemporalMemory] No saved data at {load_path}")
+            return
+        
+        try:
+            with open(load_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            # Load experiences
+            loaded_count = 0
+            now = time.time()
+            max_age_hours = 24  # Discard experiences older than 24 hours
+            
+            for exp_data in data.get("experiences", []):
+                # Skip very old experiences
+                age_hours = (now - exp_data["timestamp"]) / 3600
+                if age_hours > max_age_hours:
+                    continue
+                
+                try:
+                    state = StateSnapshot.from_dict(exp_data["state"])
+                    action = NPCAction(exp_data["action"])
+                    exp = Experience(
+                        state=state,
+                        action=action,
+                        reward=exp_data["reward"],
+                        timestamp=exp_data["timestamp"]
+                    )
+                    self.experiences.append(exp)
+                    loaded_count += 1
+                except (KeyError, ValueError) as e:
+                    logger.warning(f"[TemporalMemory] Skipped invalid experience: {e}")
+            
+            logger.info(f"[TemporalMemory] Loaded {loaded_count} experiences from {load_path}")
+            
+        except Exception as e:
+            logger.error(f"[TemporalMemory] Failed to load from {load_path}: {e}")

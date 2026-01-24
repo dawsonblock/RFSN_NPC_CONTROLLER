@@ -6,8 +6,14 @@ NPC emotional state transitions based on interactions.
 """
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Dict, Optional, List, Tuple
+import json
 import math
+import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EmotionalTone(Enum):
@@ -45,6 +51,9 @@ class EmotionalState:
     
     # Recent emotional events for continuity
     recent_triggers: List[str] = field(default_factory=list)
+    
+    # Timestamp for decay calculations
+    last_updated: float = field(default_factory=time.time)
     
     def __post_init__(self):
         self._clamp_values()
@@ -87,6 +96,7 @@ class EmotionalState:
             self.recent_triggers.append(trigger)
             self.recent_triggers = self.recent_triggers[-5:]  # Keep last 5
         
+        self.last_updated = time.time()
         self._clamp_values()
         self._update_primary_tone()
     
@@ -130,8 +140,23 @@ class EmotionalState:
             "dominance": round(self.dominance, 3),
             "primary_tone": self.primary_tone.value,
             "intensity": round(self.intensity, 3),
-            "recent_triggers": self.recent_triggers[-3:]
+            "recent_triggers": self.recent_triggers[-3:],
+            "last_updated": self.last_updated
         }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "EmotionalState":
+        """Deserialize from dict."""
+        state = cls(
+            valence=data.get("valence", 0.0),
+            arousal=data.get("arousal", 0.5),
+            dominance=data.get("dominance", 0.5),
+            intensity=data.get("intensity", 0.5),
+            recent_triggers=data.get("recent_triggers", [])
+        )
+        state.primary_tone = EmotionalTone(data.get("primary_tone", "neutral"))
+        state.last_updated = data.get("last_updated", time.time())
+        return state
 
 
 # Emotion stimulus mappings for common situations
@@ -271,8 +296,11 @@ class EmotionalStateManager:
     Persists emotional state between interactions for continuity.
     """
     
-    def __init__(self):
+    DEFAULT_SAVE_PATH = Path("data/learning/emotional_states.json")
+    
+    def __init__(self, save_path: Optional[Path] = None):
         self._states: Dict[str, EmotionalState] = {}
+        self._save_path = save_path or self.DEFAULT_SAVE_PATH
     
     def get_state(self, npc_name: str) -> EmotionalState:
         """Get or create emotional state for NPC."""
@@ -328,7 +356,13 @@ class EmotionalStateManager:
         
         if player_action in EMOTION_STIMULI:
             stimulus = EMOTION_STIMULI[player_action]
-            state.apply_stimulus(**stimulus)
+            # Extract only the valid keyword arguments
+            state.apply_stimulus(
+                valence_delta=stimulus.get("valence_delta", 0.0),
+                arousal_delta=stimulus.get("arousal_delta", 0.0),
+                dominance_delta=stimulus.get("dominance_delta", 0.0),
+                trigger=stimulus.get("trigger")
+            )
     
     def get_prompt_injection(self, npc_name: str) -> str:
         """Get emotional prompt injection for NPC."""
@@ -356,6 +390,90 @@ class EmotionalStateManager:
             name: state.to_dict()
             for name, state in self._states.items()
         }
+    
+    def save(self, path: Optional[Path] = None) -> None:
+        """
+        Persist emotional states to disk.
+        
+        Args:
+            path: Optional save path
+        """
+        save_path = path or self._save_path
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        data = {
+            "states": {
+                name: state.to_dict()
+                for name, state in self._states.items()
+            },
+            "saved_at": time.time()
+        }
+        
+        # Atomic write
+        tmp_path = save_path.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        
+        import os
+        os.replace(tmp_path, save_path)
+        logger.info(f"[EmotionalStateManager] Saved {len(self._states)} NPC states to {save_path}")
+    
+    def load(self, path: Optional[Path] = None) -> None:
+        """
+        Load emotional states from disk with time-based decay.
+        
+        Args:
+            path: Optional load path
+        """
+        load_path = path or self._save_path
+        
+        # Attempt recovery from .tmp
+        tmp_path = load_path.with_suffix(".json.tmp")
+        if not load_path.exists() and tmp_path.exists():
+            import os
+            os.replace(tmp_path, load_path)
+            logger.warning(f"[EmotionalStateManager] Recovered from {tmp_path}")
+        
+        if not load_path.exists():
+            logger.info(f"[EmotionalStateManager] No saved data at {load_path}")
+            return
+        
+        try:
+            with open(load_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            now = time.time()
+            saved_at = data.get("saved_at", now)
+            hours_elapsed = (now - saved_at) / 3600
+            
+            # Apply time-based decay: emotions fade over hours
+            decay_per_hour = 0.8  # 20% decay per hour
+            decay_factor = decay_per_hour ** hours_elapsed
+            
+            loaded_count = 0
+            for name, state_data in data.get("states", {}).items():
+                try:
+                    state = EmotionalState.from_dict(state_data)
+                    
+                    # Apply decay toward neutral based on time elapsed
+                    if hours_elapsed > 0.1:  # Only decay if > 6 minutes
+                        state.valence *= decay_factor
+                        state.arousal = 0.5 + (state.arousal - 0.5) * decay_factor
+                        state.dominance = 0.5 + (state.dominance - 0.5) * decay_factor
+                        state._update_primary_tone()
+                    
+                    self._states[name] = state
+                    loaded_count += 1
+                except Exception as e:
+                    logger.warning(f"[EmotionalStateManager] Skipped invalid state for {name}: {e}")
+            
+            logger.info(
+                f"[EmotionalStateManager] Loaded {loaded_count} NPC states "
+                f"({hours_elapsed:.1f}h elapsed, decay={decay_factor:.2f})"
+            )
+            
+        except Exception as e:
+            logger.error(f"[EmotionalStateManager] Failed to load from {load_path}: {e}")
 
 
 # Singleton instance
@@ -367,3 +485,4 @@ def get_emotion_manager() -> EmotionalStateManager:
     if _emotion_manager is None:
         _emotion_manager = EmotionalStateManager()
     return _emotion_manager
+
