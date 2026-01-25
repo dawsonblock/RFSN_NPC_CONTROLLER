@@ -26,3 +26,14 @@ dist/
 .gemini/
 .agent/
 brain/
+
+# Data files (recordings, logs, etc.)
+Python/data/recordings/
+Python/data/audit/
+Python/data/policy/
+Python/data/learning/
+data/recordings/
+data/audit/
+data/learning/
+*.wav
+*.mp3
