@@ -21,13 +21,11 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from learning.learning_contract import LearningContract
-from learning.npc_action_bandit import NPCActionBandit, NPCAction
-from action_scorer import ActionScorer
-from world_model import WorldModel
+from learning.learning_contract import (
+    LearningContract, LearningConstraints, StateSnapshot as LearningStateSnapshot,
+    LearningUpdate, EvidenceType, WriteGateError
+)
 from reward_shaping import RewardAccumulator
-from learning.reward_model import RewardModel
-from learning.trainer import Trainer
 
 # Import core modules
 from streaming_engine import StreamingMantellaEngine, StreamingMetrics, RFSNState
@@ -47,22 +45,17 @@ from xvasynth_engine import XVASynthEngine
 
 # Import learning layer
 from learning import (
-    PolicyAdapter, RewardModel, Trainer, ActionMode, 
-    FeatureVector, RewardSignals, TurnLog,
-    NPCActionBandit, BanditKey
+    PolicyAdapter, RewardModel, Trainer, ActionMode
 )
 from learning.contextual_bandit import ContextualBandit, BanditContext
 from learning.mode_bandit import ModeBandit, PhrasingMode, ModeContext
 from learning.metrics_guard import MetricsGuard
 from learning.temporal_memory import TemporalMemory
-from learning.learning_contract import (
-    LearningContract, LearningConstraints, StateSnapshot as LearningStateSnapshot,
-    LearningUpdate, EvidenceType, WriteGateError
-)
+
 from memory_governance import MemoryGovernance, GovernedMemory, MemoryType, MemorySource
-from intent_extraction import IntentGate, HybridIntentGate, IntentExtractor, IntentType, SafetyFlag
-from streaming_pipeline import StreamingPipeline, DropPolicy, TimeoutConfig, BoundedQueue, DropPolicy
-from observability import StructuredLogger, MetricsCollector, TraceContext
+from intent_extraction import HybridIntentGate, IntentExtractor, IntentType, SafetyFlag
+from streaming_pipeline import StreamingPipeline, DropPolicy, TimeoutConfig
+from observability import StructuredLogger, MetricsCollector
 from event_recorder import EventRecorder, EventType
 from state_machine import StateMachine, RFSNStateMachine
 
@@ -398,10 +391,10 @@ async def startup_event():
         )
     )
 
-    # Initialize NPCActionBandit for behavioral learning
-    npc_action_bandit = NPCActionBandit(
-        path=Path(__file__).parent.parent / "data" / "learning" / "npc_action_bandit.json"
-    )
+    # Initialize v1.3 Learning Components
+    contextual_bandit = ContextualBandit(Path(__file__).parent.parent / "data/learning/contextual_bandit.json")
+    mode_bandit = ModeBandit(Path(__file__).parent.parent / "data/learning/mode_bandit.json")
+    metrics_guard = MetricsGuard(Path(__file__).parent.parent / "data/learning/metrics_guard.json")
 
     # Initialize TemporalMemory for anticipatory action selection
     temporal_memory_config = config.get("learning", {}).get("temporal_memory", {})
@@ -443,7 +436,9 @@ async def startup_event():
         state_machine=state_machine,
         world_model=world_model,
         action_scorer=action_scorer,
-        npc_action_bandit=npc_action_bandit,
+        contextual_bandit=contextual_bandit,
+        mode_bandit=mode_bandit,
+        metrics_guard=metrics_guard,
         temporal_memory=temporal_memory
     ))
     logger.info("Runtime state initialized atomically")
@@ -833,7 +828,6 @@ async def stream_dialogue(request: DialogueRequest):
                 # Get v1.3 bandits from runtime
                 contextual_bandit = runtime.get().contextual_bandit
                 mode_bandit = runtime.get().mode_bandit
-                temporal_memory = runtime.get().temporal_memory
                 
                 # Default mode if bandit missing
                 selected_phrasing_mode = PhrasingMode.NEUTRAL_BALANCED
@@ -1255,68 +1249,7 @@ async def stream_dialogue(request: DialogueRequest):
             except Exception as e:
                 logger.error(f"State transition failed: {e}")
 
-        if policy_adapter and features and trainer:
-            try:
-                # Detect reward signals using RewardModel methods (Patch 4: real reward signals)
-                user_correction = RewardModel.detect_user_correction(request.user_input)
-                follow_up_question = RewardModel.detect_follow_up_question(request.user_input)
-                tts_overrun = streaming_engine.voice.metrics.dropped_sentences > 0
-                # conversation_continued = True when we're processing another turn
-                conversation_continued = True  # We are here, so user continued
-                
-                signals = RewardSignals(
-                    contradiction_detected=False,  # Could integrate with retrieval layer
-                    user_correction=user_correction,
-                    tts_overrun=tts_overrun,
-                    conversation_continued=conversation_continued,
-                    follow_up_question=follow_up_question
-                )
-                
-                # Compute reward
-                reward = reward_model.compute(signals)
-                
-                # Create LearningUpdate for policy weights
-                new_weights = trainer.update(
-                    policy_adapter.weights, features, action_mode, reward
-                )
-                
-                learning_update = LearningUpdate(
-                    field_name="policy_weights",
-                    old_value=policy_adapter.weights.copy(),
-                    new_value=new_weights,
-                    evidence_types=[
-                        EvidenceType.USER_CORRECTION if user_correction else EvidenceType.CONTINUED_CONVERSATION,
-                        EvidenceType.FOLLOW_UP_QUESTION if follow_up_question else EvidenceType.CONTINUED_CONVERSATION
-                    ],
-                    confidence=abs(reward),  # Use reward magnitude as confidence
-                    source="learner"
-                )
-                
-                # Apply update through LearningContract
-                try:
-                    learning_contract.apply_update(learning_update)
-                    policy_adapter.weights = new_weights
-                except WriteGateError as e:
-                    logger.warning(f"LearningContract rejected update: {e}")
 
-                # Record learning update event
-                if event_recorder:
-                    event_recorder.record(
-                        EventType.LEARNING_UPDATE,
-                        {"reward": reward, "action_mode": action_mode.name}
-                    )
-
-                # Log turn
-                turn_log = TurnLog.create(npc_name, features, action_mode, reward, signals)
-                trainer.log_turn(turn_log)
-                
-                # Save weights periodically
-                if trainer.update_count % 10 == 0:
-                    policy_adapter.save_weights()
-                
-                logger.info(f"Learning: reward={reward:.2f}, mode={action_mode.name}")
-            except Exception as e:
-                logger.error(f"Learning layer error (reward/update): {e}")
         
         # Update NPC Action Bandit with reward signal
         # Update v1.3 Learning Layers
