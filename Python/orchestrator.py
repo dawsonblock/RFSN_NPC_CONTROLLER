@@ -532,23 +532,61 @@ async def broadcast_metrics(metrics: StreamingMetrics):
             pass
 
 
-def _extract_tail_json_payload(raw_text: str) -> Optional[Dict[str, Any]]:
+def _extract_tail_json_payload(raw_text: str) -> tuple[Optional[Dict[str, Any]], bool]:
     """
-    Expect the model to append a JSON object inside a fenced block at the END:
-    ```json
-    { ... }
-    ```
+    Extract authoritative FINAL_JSON block from LLM output.
+    
+    Returns:
+        (payload, is_verified): Tuple of parsed payload and verification status.
+        - payload: Parsed dict or None if not found/invalid
+        - is_verified: True only if valid FINAL_JSON with required fields
     """
     import json
     import re
+    
+    payload = None
+    is_verified = False
+    
     try:
-        match = re.search(r'```json\s*(\{.*?\})\s*```', raw_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            json_text = match.group(1)
-            return json.loads(json_text)
-        return None
-    except Exception:
-        return None
+        # Try strict FINAL_JSON: format first (preferred)
+        final_json_match = re.search(
+            r'FINAL_JSON:\s*```json\s*(\{.*?\})\s*```',
+            raw_text, re.DOTALL | re.IGNORECASE
+        )
+        
+        if final_json_match:
+            json_text = final_json_match.group(1)
+            payload = json.loads(json_text)
+            
+            # Verify required fields exist
+            if all(k in payload for k in ["line", "action"]):
+                is_verified = True
+                # Validate confidence if present
+                if "confidence" in payload:
+                    conf = payload["confidence"]
+                    if not (isinstance(conf, (int, float)) and 0.0 <= conf <= 1.0):
+                        payload["confidence"] = 0.5  # Default if invalid
+        else:
+            # Fallback: try legacy ```json format (but mark as unverified)
+            legacy_match = re.search(
+                r'```json\s*(\{.*?\})\s*```',
+                raw_text, re.DOTALL | re.IGNORECASE
+            )
+            if legacy_match:
+                json_text = legacy_match.group(1)
+                payload = json.loads(json_text)
+                # Legacy format is not fully verified
+                is_verified = False
+                logger.warning("Legacy JSON format detected, marking as unverified")
+                
+    except json.JSONDecodeError as e:
+        logger.warning(f"FINAL_JSON parse error: {e}")
+        is_verified = False
+    except Exception as e:
+        logger.warning(f"FINAL_JSON extraction error: {e}")
+        is_verified = False
+    
+    return payload, is_verified
 
 
 
@@ -886,13 +924,19 @@ async def stream_dialogue(request: DialogueRequest):
     emotional_prompt = emotion_manager.get_prompt_injection(state.npc_name)
     system_prompt += f"\n\n{emotional_prompt}"
 
-    # Require a structured tail block (keeps streaming dialogue normal, but adds a machine-verifiable footer)
+    # Require strict FINAL_JSON block (authoritative output contract)
+    # This is the ONLY trusted source for memory storage and learning updates
     system_prompt += (
-        "\n\nAt the end of your response, append a JSON block in a fenced ```json code block with keys: "
-        "line, tone, action. "
-        "The 'line' must match what you actually said. "
-        "The 'action' must match the required action. "
-        "Do not include any extra keys."
+        "\n\n=== OUTPUT CONTRACT ===\n"
+        "After your spoken dialogue, you MUST append:\n"
+        "FINAL_JSON:\n"
+        "```json\n"
+        '{"line": "<your exact spoken dialogue>", "action": "<the required npc_action>", "confidence": <0.0-1.0>}\n'
+        "```\n"
+        "The 'line' must match EXACTLY what you said above.\n"
+        "The 'action' must match the required action from [ACTION_CONTROL].\n"
+        "The 'confidence' is your certainty the response is appropriate (0.0-1.0).\n"
+        "This block is MANDATORY. Responses without valid FINAL_JSON will be discarded."
     )
 
     full_prompt = f"System: {system_prompt}\n{history}\nPlayer: {request.user_input}\n{state.npc_name}:"
@@ -1015,29 +1059,44 @@ async def stream_dialogue(request: DialogueRequest):
                 inc_tokens(len(chunk.text.split())) # Rough estimate
                 
                 if chunk.is_final and config_watcher.get("memory_enabled"):
-                    payload = _extract_tail_json_payload(raw_response)
+                    payload, is_verified = _extract_tail_json_payload(raw_response)
+                    
+                    # Track if we should skip learning updates
+                    skip_learning = False
 
                     if payload and isinstance(payload, dict) and "line" in payload:
                         # Authoritative stored text comes from structured payload
                         stored_text = _cleanup_tokens(str(payload.get("line", "")))
+                        
+                        # Get confidence from FINAL_JSON (default 0.5 if missing)
+                        turn_confidence = payload.get("confidence", 0.5)
 
                         # Optional: sanity-check action match (record if mismatch)
                         if selected_npc_action:
                             expected = selected_npc_action.value
-                            got = str(payload.get("action", "")).strip()
-                            if got and got != expected and event_recorder:
+                            got = str(payload.get("action", "")).strip().lower()
+                            if got and got != expected.lower() and event_recorder:
                                 event_recorder.record(
                                     EventType.SAFETY_EVENT,
                                     {"reason": "action_mismatch_in_tail_json", "expected": expected, "got": got, "npc": npc_name}
                                 )
+                                # Action mismatch means unverified
+                                is_verified = False
                     else:
                         # No valid structured footer -> treat as unsafe/unverifiable
                         stored_text = full_response.strip()
+                        turn_confidence = 0.0
+                        is_verified = False
                         if event_recorder:
                             event_recorder.record(
                                 EventType.SAFETY_EVENT,
-                                {"reason": "missing_or_invalid_tail_json", "npc": npc_name}
+                                {"reason": "missing_or_invalid_final_json", "npc": npc_name}
                             )
+                    
+                    # CRITICAL: Skip learning on unverified turns
+                    if not is_verified:
+                        skip_learning = True
+                        logger.warning(f"Unverified FINAL_JSON for {npc_name} - skipping learning update")
 
                     memory.add_turn(request.user_input, stored_text)
                     
@@ -1045,7 +1104,7 @@ async def stream_dialogue(request: DialogueRequest):
                     if event_recorder:
                         event_recorder.record(
                             EventType.LLM_GENERATION,
-                            {"prompt": full_prompt, "response": stored_text}
+                            {"prompt": full_prompt, "response": stored_text, "verified": is_verified}
                         )
                     
                     # Also add to MemoryGovernance for provenance tracking
@@ -1055,7 +1114,7 @@ async def stream_dialogue(request: DialogueRequest):
                             memory_type=MemoryType.CONVERSATION_TURN,
                             source=MemorySource.NPC_RESPONSE,
                             content=stored_text,
-                            confidence=1.0,
+                            confidence=turn_confidence if is_verified else 0.0,  # Quarantine unverified
                             timestamp=datetime.utcnow(),
                             metadata={
                                 "npc_name": npc_name,
@@ -1063,7 +1122,9 @@ async def stream_dialogue(request: DialogueRequest):
                                 "action_mode": action_mode.name if action_mode else None,
                                 "npc_action": selected_npc_action.value if selected_npc_action else None,
                                 "player_signal": player_signal.value,
-                                "action_score": selected_action_score.total_score if selected_action_score else None
+                                "action_score": selected_action_score.total_score if selected_action_score else None,
+                                "verified": is_verified,  # Explicit verification flag
+                                "quarantined": not is_verified  # Mark quarantine status
                             }
                         )
                         memory_governance.add_memory(governed_memory)
@@ -1084,8 +1145,8 @@ async def stream_dialogue(request: DialogueRequest):
                         )
                         logger.debug(f"Emotional state updated for {npc_name}: {emotion_mgr.get_state(npc_name).primary_tone.value}")
                     
-                    # Micro-reward: Positive emotion
-                    if emotion_info['emotion']['primary'] in ("joy", "trust", "anticipation"):
+                    # Micro-reward: Positive emotion (only if verified)
+                    if is_verified and emotion_info['emotion']['primary'] in ("joy", "trust", "anticipation"):
                         reward_accumulator.add(0.10, "positive_emotion")
             
             # Explicit End-of-Stream Flush (Patch v8.9)
