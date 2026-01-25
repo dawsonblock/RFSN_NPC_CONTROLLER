@@ -26,43 +26,52 @@ class RewardModel:
     
     def compute(self, signals: RewardSignals) -> float:
         """
-        Compute scalar reward from signals
+        Compute scalar reward from signals with normalization.
         
         Args:
             signals: RewardSignals with boolean flags
             
         Returns:
-            Clamped reward in [-2.0, 2.0]
+            Clamped reward in [-1.0, 1.0]
         """
-        reward = 0.0
+        # Collect individual components for logging
+        components = {}
         
-        # Negative signals
+        # Negative signals (normalized to [-1, 0])
         if signals.contradiction_detected:
-            reward += self.CONTRADICTION_PENALTY
-            logger.debug(f"Contradiction detected: {self.CONTRADICTION_PENALTY}")
+            components["contradiction"] = -1.0
         
         if signals.user_correction:
-            reward += self.USER_CORRECTION_PENALTY
-            logger.debug(f"User correction: {self.USER_CORRECTION_PENALTY}")
+            components["user_correction"] = -0.7
         
         if signals.tts_overrun:
-            reward += self.TTS_OVERRUN_PENALTY
-            logger.debug(f"TTS overrun: {self.TTS_OVERRUN_PENALTY}")
+            components["tts_overrun"] = -0.2
         
-        # Positive signals
+        # Positive signals (normalized to [0, 1])
         if signals.conversation_continued:
-            reward += self.CONVERSATION_CONTINUED_REWARD
-            logger.debug(f"Conversation continued: {self.CONVERSATION_CONTINUED_REWARD}")
+            components["conversation_continued"] = 0.4
         
         if signals.follow_up_question:
-            reward += self.FOLLOW_UP_QUESTION_REWARD
-            logger.debug(f"Follow-up question: {self.FOLLOW_UP_QUESTION_REWARD}")
+            components["follow_up_question"] = 0.2
         
-        # Clamp to bounds
-        reward = max(self.MIN_REWARD, min(self.MAX_REWARD, reward))
+        # Sum components
+        raw_reward = sum(components.values())
         
-        logger.info(f"Computed reward: {reward:.2f}")
-        return reward
+        # Normalize by count of active signals to prevent extreme values
+        n_active = max(1, len(components))
+        normalized_reward = raw_reward / n_active
+        
+        # Clamp once at end to [-1.0, 1.0]
+        final_reward = max(-1.0, min(1.0, normalized_reward))
+        
+        # Log per-component breakdown for debugging
+        if components:
+            component_str = ", ".join(f"{k}={v:+.2f}" for k, v in components.items())
+            logger.info(f"Reward components: [{component_str}] -> raw={raw_reward:.2f}, norm={normalized_reward:.2f}, final={final_reward:.2f}")
+        else:
+            logger.info("Reward: no active signals, final=0.00")
+        
+        return final_reward
     
     @staticmethod
     def detect_user_correction(user_text: str) -> bool:

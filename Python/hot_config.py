@@ -77,9 +77,23 @@ class ConfigWatcher:
             return False
     
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a config value"""
+        """Get a config value with dot-path support (e.g., 'llm.temperature')"""
         with self._lock:
-            return self._current_config.get(key, default)
+            # Fast path for flat keys
+            if "." not in key:
+                return self._current_config.get(key, default)
+            
+            # Navigate nested path
+            parts = key.split(".")
+            value = self._current_config
+            for part in parts:
+                if isinstance(value, dict):
+                    value = value.get(part)
+                else:
+                    return default
+                if value is None:
+                    return default
+            return value
     
     def get_all(self) -> Dict[str, Any]:
         """Get entire config"""

@@ -585,6 +585,10 @@ class RFSNStateMachine(StateMachine):
         Returns:
             state_after: State dictionary after the transition
         """
+        # Normalize action to uppercase (orchestrator passes lowercase .value)
+        npc_action = npc_action.upper()
+        player_signal = player_signal.lower()  # Ensure consistency
+        
         state_after = state_before.copy()
 
         # Base affinity adjustment based on player signal

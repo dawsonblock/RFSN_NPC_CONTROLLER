@@ -909,11 +909,19 @@ async def stream_dialogue(request: DialogueRequest):
         first_chunk_sent = False
         start_gen = time.time()
         
-        # Validate LLM output through IntentGate
-        def validate_llm_output(text: str) -> str:
-            """Validate and filter LLM output through IntentGate"""
-            if not intent_gate:
-                return text
+        # Validate LLM output through IntentGate (per-turn, not per-chunk)
+        # Track if first sentence has been validated to avoid duplicate checks
+        first_sentence_validated = False
+        sentence_buffer = ""
+        
+        def validate_sentence(text: str, is_first: bool = False) -> tuple[str, bool]:
+            """
+            Validate a complete sentence through IntentGate.
+            Returns (filtered_text, should_abort_stream).
+            Only runs on first sentence and final response to reduce overhead.
+            """
+            if not intent_gate or not text.strip():
+                return text, False
             
             # Extract intent from the text
             proposal = intent_gate._extractor.extract(text)
@@ -926,17 +934,18 @@ async def stream_dialogue(request: DialogueRequest):
                 SafetyFlag.ILLEGAL_ACTION
             }
             
-            filtered_text = text
             if any(flag in proposal.safety_flags for flag in harmful_flags):
-                logger.warning(f"IntentGate blocked content with safety flags: {proposal.safety_flags}")
-                # For safety, return empty string if harmful content detected
-                return ""
+                if is_first:
+                    logger.warning(f"IntentGate blocked first sentence with safety flags: {proposal.safety_flags}")
+                    return "", True  # Abort stream
+                logger.warning(f"IntentGate detected safety flags in content: {proposal.safety_flags}")
+                return "", False
             
-            # Filter low-confidence content
+            # Log low-confidence content (but don't filter during stream)
             if proposal.confidence < intent_gate.require_min_confidence:
-                logger.debug(f"IntentGate filtered low-confidence content (conf={proposal.confidence})")
+                logger.debug(f"IntentGate: low-confidence content (conf={proposal.confidence})")
             
-            return filtered_text
+            return text, False
 
         try:
             # Emit metadata event first (before any content)
@@ -981,8 +990,16 @@ async def stream_dialogue(request: DialogueRequest):
                         {"text": request.user_input, "npc_name": npc_name}
                     )
                 
-                # Validate and clean text through IntentGate
-                validated_text = validate_llm_output(chunk.text)
+                # Buffer text and validate on sentence boundaries (per-turn, not per-chunk)
+                sentence_buffer += chunk.text
+                validated_text = chunk.text
+                if not first_sentence_validated and any(p in sentence_buffer for p in '.!?'):
+                    validated_text, abort = validate_sentence(sentence_buffer, is_first=True)
+                    first_sentence_validated = True
+                    if abort:
+                        yield f"data: {json.dumps({'error': 'Content blocked'})}\\n\\n"
+                        return
+                    sentence_buffer = ""
 
                 # Accumulate RAW text before cleanup for JSON extraction
                 # (we need this because _cleanup_tokens below strips code blocks)
