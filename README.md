@@ -1,66 +1,56 @@
-# 🎮 RFSN Orchestrator
-
 <div align="center">
+
+# 🎮 RFSN NPC Controller
+
+<img src="https://img.shields.io/badge/version-10.1-blueviolet?style=for-the-badge" alt="Version 10.1"/>
 
 **Production-Ready Streaming AI System for Real-Time NPC Dialogue**
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-300%20passing-success.svg)](Python/tests/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Code Style](https://img.shields.io/badge/code%20style-optimized-brightgreen.svg)](Python/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Tests](https://img.shields.io/badge/Tests-290%2B%20Passing-success?style=flat-square&logo=pytest)](Python/tests/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+[![Ollama](https://img.shields.io/badge/Ollama-LLM-black?style=flat-square)](https://ollama.ai/)
 
-*Production-ready streaming AI with semantic action selection, world model prediction, and real-time TTS*
+*Intelligent NPCs with semantic action selection, world model prediction, adaptive learning, and real-time TTS*
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [API](#-api-reference) • [Performance](#-performance)
+---
+
+[**Features**](#-features) • [**Quick Start**](#-quick-start) • [**Architecture**](#-architecture) • [**API**](#-api-reference) • [**Learning**](#-learning-layer) • [**Performance**](#-performance)
 
 </div>
 
 ---
 
-## 🌟 Features
+## ✨ Features
 
-### Core Capabilities
+### 🧠 Core Intelligence
 
-- **🧠 Intelligent Tokenization** - Smart sentence detection with abbreviation handling (Dr., Mr., Jarl)
-- **🎯 Semantic Action Selection** - World model predicts outcomes and scores NPC actions (32 discrete actions)
-- **🎙️ Dual TTS Voice Router** - Chatterbox-Turbo + Chatterbox-Full with lazy loading, LRU audio cache, and auto-routing by emotional intensity
-- **💭 LLM Intent Classification** - Hybrid regex+LLM player intent extraction via Ollama
-- **😊 Emotional State System** - VAD-based emotional modeling with decay and persistence
-- **📈 Sentiment Tracking** - Multi-player longitudinal sentiment analysis with trend detection
-- **⚡ Thread-Safe Queue** - Deque+Condition pattern eliminates race conditions
-- **🔒 Atomic Runtime** - Safe hot-reloads without half-applied config
-- **📊 Live Metrics** - WebSocket-based performance monitoring dashboard
-- **💾 Persistent Memory** - Temporal memory, emotional states, and bandit weights persist across restarts
-- **🤖 Adaptive Learning** - Contextual bandit with adaptive exploration learns optimal dialogue styles
-- **🛡️ Safety Rules** - Hard overrides prevent learned stupidity in combat/trust/quest contexts
-- **📝 Learning Event Logger** - Thread-safe CSV logging for learning diagnostics
+| Feature | Description |
+|---------|-------------|
+| **Semantic Action Selection** | World model predicts outcomes and scores 32 discrete NPC actions |
+| **Contextual Bandits** | Thompson sampling with adaptive exploration learns optimal dialogue styles |
+| **Temporal Memory** | Short-term experience buffer enables anticipatory reasoning |
+| **Hybrid NLU** | LLM-powered intent classification with regex fallback via Ollama |
+| **Emotional Modeling** | VAD-based (Valence/Arousal/Dominance) emotional state with decay |
+| **Sentiment Tracking** | Multi-player longitudinal sentiment analysis with trend detection |
 
-### Production Hardening (v10.0)
+### 🎙️ Voice & Speech
 
-- ✅ **300 Tests** - Comprehensive coverage including streaming, learning, world model, voice routing with cache tests, and persistence
-- ✅ **Zero Race Conditions** - Deque+Condition queue pattern (no task_done/join bugs)
-- ✅ **Atomic State Swaps** - RuntimeState prevents half-applied config during reloads
-- ✅ **Full Persistence** - Temporal memory, emotional states, and bandit weights saved on shutdown
-- ✅ **Hybrid NLU** - LLM-powered intent classification with regex fallback
-- ✅ **Safety Rules** - Hard overrides prevent learned stupidity in critical states
+| Feature | Description |
+|---------|-------------|
+| **Dual TTS Router** | Chatterbox-Turbo + Chatterbox-Full with automatic intensity-based selection |
+| **Lazy Model Loading** | Full model (~2GB VRAM) loaded only on first HIGH intensity request |
+| **LRU Audio Cache** | 100 clips, 5-min TTL for repeated lines |
+| **Kokoro Fallback** | Graceful CPU-only degradation when CUDA unavailable |
 
-### Voice Router (v10.1)
+### 🛡️ Production Hardening
 
-Intelligent dual-TTS engine that automatically selects between fast Turbo and expressive Full models:
-
-| Intensity | Engine | Use Case | Exaggeration |
-|-----------|--------|----------|--------------|
-| **LOW** | Chatterbox-Turbo | Guards, shopkeepers, barks | 0.3 |
-| **MEDIUM** | Chatterbox-Turbo | Companion casual chat | 0.6 |
-| **HIGH** | Chatterbox-Full | Memory callbacks, relationship moments | 0.8 |
-
-**Optimizations:**
-
-- 🚀 **Lazy Model Loading** - Full model (~2GB VRAM) loaded only on first HIGH request
-- 💾 **LRU Audio Cache** - Repeated lines served from cache (100 clips, 5-min TTL)
-- ⚡ **Intensity Precomputation** - Cached for stable NPC states (5s TTL)
-- 🔄 **Kokoro Fallback** - Graceful degradation when CUDA unavailable
+- ✅ **290+ Tests** — Comprehensive coverage including streaming, learning, world model, and persistence
+- ✅ **Zero Race Conditions** — Deque+Condition queue pattern eliminates task_done/join bugs
+- ✅ **Atomic State Swaps** — RuntimeState prevents half-applied config during hot reloads
+- ✅ **Full Persistence** — Temporal memory, emotional states, and bandit weights survive restarts
+- ✅ **Safety Rules** — Hard overrides prevent learned stupidity in combat/trust/quest contexts
 
 ---
 
@@ -68,27 +58,26 @@ Intelligent dual-TTS engine that automatically selects between fast Turbo and ex
 
 ### Prerequisites
 
-- Python 3.10+ (required for Kokoro TTS)
-- 4GB RAM minimum
-- macOS, Linux, or Windows
-- Ollama (for local LLM)
+- **Python 3.10+** (required for Kokoro TTS)
+- **4GB RAM** minimum
+- **Ollama** for local LLM inference
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/dawsonblock/RFSN-ORCHESTRATOR.git
-cd RFSN-ORCHESTRATOR
+git clone https://github.com/dawsonblock/RFSN_NPC_CONTROLLER.git
+cd RFSN_NPC_CONTROLLER
 
 # Create virtual environment
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r Python/requirements-core.txt
 pip install kokoro-onnx
 
-# Install Ollama (macOS)
+# Install & start Ollama (macOS)
 brew install ollama
 ollama serve &
 ollama pull llama3.2
@@ -98,15 +87,19 @@ cd Python
 python -m uvicorn orchestrator:app --host 0.0.0.0 --port 8000
 ```
 
-**Server URL**: `http://127.0.0.1:8000`  
-**Dashboard**: `http://127.0.0.1:8000`
-**Mobile UI**: `http://127.0.0.1:8080` (run `python mobile_chat/server.py`)
+### Access Points
 
-### Docker (Optional)
+| Endpoint | URL |
+|----------|-----|
+| **API Server** | `http://localhost:8000` |
+| **Dashboard** | `http://localhost:8000` |
+| **Mobile UI** | `http://localhost:8080` (run `python mobile_chat/server.py`) |
+
+### Docker
 
 ```bash
-docker build -t rfsn-orchestrator .
-docker run -p 8000:8000 rfsn-orchestrator
+docker build -t rfsn-npc .
+docker run -p 8000:8000 rfsn-npc
 ```
 
 ---
@@ -114,60 +107,50 @@ docker run -p 8000:8000 rfsn-orchestrator
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    RFSN Orchestrator v10.0                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   FastAPI    │───▶│  Streaming   │───▶│ Kokoro TTS   │  │
-│  │   Server     │    │   Engine     │    │ (ONNX/async) │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                    │                    │          │
-│         ▼                    ▼                    ▼          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Learning   │    │ DequeSpeech  │    │   Audio      │  │
-│  │    Layer     │    │    Queue     │    │   Player     │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                    │                               │
-│         ▼                    ▼                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │Temporal      │    │  World Model │    │  Emotional   │  │
-│  │  Memory      │───▶│ (Prediction) │◀───│   State      │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                    │                    │          │
-│         ▼                    ▼                    ▼          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Bandit     │    │Action Scorer │    │  Sentiment   │  │
-│  │  Learner     │───▶│  (Scoring)   │◀───│   Tracker    │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     RFSN NPC Controller v10.1                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
+│  │   FastAPI    │───▶│  Streaming   │───▶│   Voice Router       │  │
+│  │   Server     │    │   Engine     │    │  (Turbo/Full/Kokoro) │  │
+│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
+│         │                    │                       │              │
+│         ▼                    ▼                       ▼              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
+│  │   Hybrid     │    │ DequeSpeech  │    │    Audio Player      │  │
+│  │   NLU Gate   │    │    Queue     │    │    (Async/Stream)    │  │
+│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
+│         │                    │                                      │
+│         ▼                    ▼                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
+│  │   Temporal   │    │ World Model  │    │   Emotional State    │  │
+│  │   Memory     │───▶│ (Prediction) │◀───│   (VAD + Decay)      │  │
+│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
+│         │                    │                       │              │
+│         ▼                    ▼                       ▼              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
+│  │   Bandit     │    │Action Scorer │    │  Sentiment Tracker   │  │
+│  │   Learner    │───▶│ (32 Actions) │◀───│  (Multi-Player)      │  │
+│  └──────────────┘    └──────────────┘    └──────────────────────┘  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
 
 | Component | Purpose | Location |
 |-----------|---------|----------|
-| **Orchestrator** | FastAPI server, request handling | `Python/orchestrator.py` |
+| **Orchestrator** | FastAPI server, lifecycle hooks | `Python/orchestrator.py` |
 | **Streaming Engine** | Token processing, sentence detection | `Python/streaming_engine.py` |
-| **DequeSpeechQueue** | Thread-safe bounded queue with drop policy | `Python/streaming_voice_system.py` |
-| **World Model** | Predicts state transitions from actions | `Python/world_model.py` |
-| **Action Scorer** | Scores candidate actions using predictions | `Python/action_scorer.py` |
-| **Temporal Memory** | Short-term experience storage with persistence | `Python/learning/temporal_memory.py` |
-| **Emotional State** | VAD-based emotional modeling with decay | `Python/emotional_tone.py` |
-| **Intent Extraction** | Hybrid LLM+regex player intent classification | `Python/intent_extraction.py` |
-| **Sentiment Tracker** | Multi-player longitudinal sentiment analysis | `Python/learning/sentiment_tracker.py` |
-| **NPC Action Bandit** | Thompson sampling with adaptive exploration | `Python/learning/npc_action_bandit.py` |
-| **Learning Logger** | Thread-safe CSV logging for diagnostics | `Python/learning/event_logger.py` |
-| **Runtime State** | Atomic state management for safe reloads | `Python/runtime_state.py` |
-| **State Machine** | Authoritative state transitions with invariants | `Python/state_machine.py` |
-| **Memory Manager** | Conversation persistence, backups | `Python/memory_manager.py` |
-| **Kokoro TTS** | Text-to-speech synthesis (ONNX) | `Python/kokoro_tts.py` |
-| **Voice Router** | Dual-TTS routing with lazy load, LRU cache | `Python/voice_router.py` |
-| **Chatterbox TTS** | Expressive TTS with emotion control | `Python/chatterbox_tts.py` |
-| **Ollama Client** | Local LLM HTTP API client | `Python/ollama_client.py` |
-| **Mobile Chat** | iPhone-optimized chat UI | `mobile_chat/` |
-| **Dashboard** | Live metrics visualization | `Dashboard/index.html` |
+| **Voice Router** | Dual-TTS with lazy load, LRU cache | `Python/voice_router.py` |
+| **World Model** | Predicts state transitions | `Python/world_model.py` |
+| **Action Scorer** | Scores 32 candidate actions | `Python/action_scorer.py` |
+| **NPC Action Bandit** | Thompson sampling learner | `Python/learning/npc_action_bandit.py` |
+| **Temporal Memory** | Short-term experience buffer | `Python/learning/temporal_memory.py` |
+| **Emotional State** | VAD modeling with decay | `Python/emotional_tone.py` |
+| **Sentiment Tracker** | Longitudinal player analysis | `Python/learning/sentiment_tracker.py` |
+| **Intent Extraction** | Hybrid LLM+regex classification | `Python/intent_extraction.py` |
 
 ---
 
@@ -185,7 +168,7 @@ Content-Type: application/json
 }
 ```
 
-**Response**: Server-Sent Events (SSE) stream
+**Response**: Server-Sent Events (SSE)
 
 ```
 data: {"sentence": "Whiterun is a great city.", "is_final": false, "latency_ms": 150}
@@ -195,22 +178,15 @@ data: {"sentence": "We welcome all travelers.", "is_final": true, "latency_ms": 
 ### Memory Management
 
 ```http
-# Get memory stats
-GET /api/memory/{npc_name}/stats
-
-# Safe reset with backup
-POST /api/memory/{npc_name}/safe_reset
-
-# List backups
-GET /api/memory/{npc_name}/backups
+GET  /api/memory/{npc_name}/stats       # Get memory statistics
+POST /api/memory/{npc_name}/safe_reset  # Reset with backup
+GET  /api/memory/{npc_name}/backups     # List available backups
 ```
 
 ### Performance Tuning
 
 ```http
 POST /api/tune-performance
-Content-Type: application/json
-
 {
   "temperature": 0.7,
   "max_tokens": 150,
@@ -221,12 +197,55 @@ Content-Type: application/json
 ### Health & Metrics
 
 ```http
-# Health check
-GET /api/health
-
-# WebSocket metrics stream
-WS /ws/metrics
+GET /api/health           # Health check
+WS  /ws/metrics           # WebSocket metrics stream
 ```
+
+---
+
+## 🤖 Learning Layer
+
+### Contextual Bandit
+
+The system uses Thompson sampling with adaptive exploration to learn optimal dialogue styles per NPC:
+
+| Mode | Description |
+|------|-------------|
+| `TERSE_DIRECT` | Short, factual responses (3-4 sentences) |
+| `WARM_FRIENDLY` | Empathetic, relational responses |
+| `LORE_RICH` | Detailed world-building responses |
+| `PLAYFUL_WITTY` | Humorous, light-hearted responses |
+| `FORMAL_RESPECTFUL` | Distant, proper responses |
+| `NEUTRAL_BALANCED` | Default balanced approach |
+
+### Safety Rules
+
+Hard overrides prevent learned stupidity:
+
+| Condition | Override |
+|-----------|----------|
+| **Combat + Fear > 0.7** | Forces `FLEE` action |
+| **Trust < 0.1** | Forbids `ACCEPT`, `OFFER`, `HELP` |
+| **Quest Active** | Biases toward `HELP`, `AGREE` |
+
+---
+
+## 🎙️ Voice Router
+
+Intelligent dual-TTS engine with automatic model selection:
+
+| Intensity | Engine | Use Case | Exaggeration |
+|-----------|--------|----------|--------------|
+| **LOW** | Chatterbox-Turbo | Guards, shopkeepers, barks | 0.3 |
+| **MEDIUM** | Chatterbox-Turbo | Companion casual chat | 0.6 |
+| **HIGH** | Chatterbox-Full | Memory callbacks, relationship moments | 0.8 |
+
+**Optimizations:**
+
+- 🚀 **Lazy Loading** — Full model loaded only when needed
+- 💾 **LRU Cache** — 100 clips with 5-minute TTL
+- ⚡ **Precompute** — Intensity cached for 5 seconds
+- 🔄 **Fallback** — Graceful Kokoro degradation
 
 ---
 
@@ -239,454 +258,39 @@ WS /ws/metrics
 | First Token Latency | <1.5s | ~1.2s |
 | Sentence Detection | <50ms | ~30ms |
 | TTS Processing | <100ms | ~80ms |
-| Queue Throughput | 10 items/s | 12 items/s |
+| Queue Throughput | 10/s | 12/s |
 
-### Key Optimizations
+### Optimizations
 
-- **Deque+Condition Queue** - Eliminates task_done/join race conditions
-- **Atomic Drop Policy** - Drop runs under same lock as worker get()
-- **Pre-compiled Regex** - Eliminates hot-path compilation overhead
-- **Sync-Only TTS** - Single queue path prevents double-buffering
-- **Config Snapshots** - Per-request snapshots prevent mid-stream changes
+- **Deque+Condition Queue** — Eliminates race conditions
+- **Atomic Drop Policy** — Drop runs under same lock as worker
+- **Pre-compiled Regex** — No hot-path compilation overhead
+- **Config Snapshots** — Per-request snapshots prevent mid-stream changes
 
 ---
 
 ## 🧪 Testing
 
-### Run All Tests
-
 ```bash
-cd Python
-python -m pytest tests/ -v
+# Run all tests
+cd Python && python -m pytest tests/ -v
+
+# Specific categories
+pytest tests/test_learning*.py -v          # Learning layer
+pytest tests/test_world_model*.py -v       # World model
+pytest tests/test_voice_router.py -v       # Voice routing
+pytest tests/test_production.py -v         # Production scenarios
 ```
 
-### Test Coverage
-
-- **Core Functionality**: 180+ tests
-- **Learning Layer**: 45+ tests
-- **World Model Integration**: 15+ tests  
-- **Persistence & Recovery**: 20+ tests
-- **Edge Cases**: 14+ tests
-- **Total**: 274 tests (100% passing)
-
-### Test Categories
-
-```bash
-# Unit tests
-pytest tests/test_streaming_fixes.py -v
-
-# Learning layer tests
-pytest tests/test_learning.py tests/test_learning_policy.py -v
-
-# Performance tests
-pytest tests/test_performance.py -v
-
-# Edge cases
-pytest tests/test_edge_cases.py -v
-
-# Backpressure tests
-pytest tests/test_backpressure.py -v
-```
-
----
-
-## 🎯 World Model & Action Scoring
-
-The system includes a world model that predicts state transitions and scores NPC actions based on predicted outcomes:
-
-### NPC Actions
-
-| Action | Description | Use Case |
-|--------|-------------|----------|
-| `GREET` | Warmly welcome the player | First meeting, friendly encounters |
-| `APOLOGIZE` | Express regret for mistakes | After conflicts, mistakes |
-| `THREATEN` | Intimidate the player | Combat, hostile situations |
-| `COMPLIMENT` | Praise the player | Building rapport |
-| `HELP` | Offer assistance | Quests, requests for aid |
-| `REQUEST` | Ask for something | Quest objectives |
-| `AGREE` | Accept player proposals | Cooperation |
-| `DISAGREE` | Reject player proposals | Conflict, boundaries |
-| `IGNORE` | Dismiss the player | Low trust, busy |
-| `INQUIRE` | Ask questions | Information gathering |
-| `EXPLAIN` | Provide information | Lore, instructions |
-
-### Player Signals
-
-The system classifies player input into discrete signals:
-
-- `GREET` - Friendly greetings
-- `INSULT` - Hostile language
-- `HELP` - Requests for assistance
-- `THREATEN` - Combat initiation
-- `APOLOGIZE` - Conciliatory language
-- `QUESTION` - Information seeking
-- `REQUEST` - Demands or asks
-
-### Safety Rules
-
-Hard overrides prevent learned stupidity in critical states:
-
-- **Combat + Fear > 0.7** → Forces `FLEE` action
-- **Trust < 0.1** → Forbids `ACCEPT`, `OFFER`, `HELP` actions
-- **Quest Active** → Biases toward `HELP`, `ACCEPT`, `AGREE` actions
-
-### How It Works
-
-1. **Player Signal Classification** - Regex-based pattern matching with word boundaries
-2. **State Snapshot Creation** - Captures current NPC state (mood, affinity, trust, fear)
-3. **Candidate Proposal** - Generates 5-9 candidate actions with safety overrides
-4. **World Model Prediction** - Predicts outcome state for each action
-5. **Utility Scoring** - Scores predicted states using affinity, trust, fear weights
-6. **Action Selection** - Selects highest-scoring action
-7. **Prompt Injection** - Injects action instruction into LLM system prompt
-8. **State Transition** - Applies authoritative state update via `apply_transition()`
-
----
-
-## 🤖 Learning Layer
-
-The system includes a lightweight contextual bandit that learns optimal dialogue styles per NPC:
-
-### Action Modes
-
-| Mode | Description |
-|------|-------------|
-| `TERSE_DIRECT` | Short, factual responses (3-4 sentences) |
-| `WARM_FRIENDLY` | Empathetic, relational responses |
-| `LORE_RICH` | Detailed world-building responses |
-| `PLAYFUL_WITTY` | Humorous, light-hearted responses |
-| `FORMAL_RESPECTFUL` | Distant, proper responses |
-| `NEUTRAL_BALANCED` | Default balanced approach |
-
-### How It Works
-
-1. **Feature Extraction** - Extracts 10 features from NPC state, conversation history, and memory retrieval
-2. **Policy Selection** - ε-greedy exploration over action modes with linear weights
-3. **Reward Learning** - Updates policy based on conversation signals (continuation, correction, follow-up)
-
-### Safety Guarantees
-
-- Learning is scoped to style selection only (not model weights)
-- Weights are bounded with decay and clipping
-- Atomic weight persistence
-- Per-NPC isolation
-
----
-
-## 🎯 Running Episode Simulations
-
-### How to Run One NPC Through 100 Turns and Export Episode Data
-
-For testing, evaluation, or machine learning experiments, you can run extended NPC conversations and export the complete episode data.
-
-#### 1. Create an Episode Runner Script
-
-Create `Python/run_episode.py`:
-
-```python
-"""
-Run a multi-turn NPC episode and export structured logs.
-"""
-import asyncio
-import json
-import time
-from pathlib import Path
-from datetime import datetime
-
-from orchestrator import app
-from world_model import StateSnapshot, PlayerSignal, NPCAction
-from action_scorer import ActionScorer
-from learning.bandit_core import BanditCore
-
-
-async def run_episode(npc_id: str, num_turns: int = 100, output_file: str = None):
-    """
-    Run a simulated NPC episode with predefined player inputs.
-    
-    Args:
-        npc_id: Unique identifier for the NPC
-        num_turns: Number of conversation turns to simulate
-        output_file: Path to save episode.jsonl (defaults to data/episodes/{npc_id}_{timestamp}.jsonl)
-    """
-    # Initialize components
-    action_scorer = ActionScorer()
-    bandit = BanditCore(strategy="thompson_beta", seed=42)
-    
-    # Initialize NPC state
-    state = StateSnapshot(
-        mood="neutral",
-        affinity=0.0,
-        relationship="stranger",
-        recent_sentiment=0.0,
-        combat_active=False,
-        quest_active=False,
-        trust_level=0.5,
-        fear_level=0.0
-    )
-    
-    # Predefined player signals for simulation
-    player_signals = [
-        PlayerSignal.GREET,
-        PlayerSignal.QUESTION,
-        PlayerSignal.COMPLIMENT,
-        PlayerSignal.REQUEST,
-        PlayerSignal.AGREE,
-        PlayerSignal.DISAGREE,
-        PlayerSignal.INSULT,
-        PlayerSignal.APOLOGIZE,
-        PlayerSignal.THREATEN,
-        PlayerSignal.FAREWELL,
-    ]
-    
-    # Episode log
-    episode_data = []
-    
-    print(f"Starting episode: {npc_id} for {num_turns} turns")
-    print("=" * 60)
-    
-    for turn in range(num_turns):
-        # Select player signal (cycle through predefined signals)
-        player_signal = player_signals[turn % len(player_signals)]
-        
-        print(f"\nTurn {turn + 1}/{num_turns}")
-        print(f"Player Signal: {player_signal.value}")
-        print(f"State: mood={state.mood}, affinity={state.affinity:.2f}, rel={state.relationship}")
-        
-        # Generate and score candidates
-        candidates = action_scorer.propose_candidates(state, player_signal)
-        scored_candidates = [
-            (action, action_scorer.score_action(state, action, player_signal))
-            for action in candidates
-        ]
-        
-        # Select top-K
-        top_k = sorted(scored_candidates, key=lambda x: x[1].total_score, reverse=True)[:4]
-        top_actions = [action for action, _ in top_k]
-        
-        # Bandit selection
-        bandit_key = f"{state.mood}|{state.relationship}|{player_signal.value}"
-        priors = {action: score.total_score for action, score in top_k}
-        selected_action = bandit.select(bandit_key, [a.value for a in top_actions], priors)
-        selected_action_enum = NPCAction(selected_action)
-        
-        # Simulate reward (in real system, comes from player engagement)
-        # For simulation, use scorer confidence as proxy
-        selected_score = next(score for action, score in top_k if action == selected_action_enum)
-        reward = min(1.0, max(0.0, (selected_score.total_score / 10.0)))
-        
-        # Update bandit
-        bandit.update(bandit_key, selected_action, reward)
-        
-        # Log turn data
-        turn_data = {
-            "turn": turn + 1,
-            "timestamp": time.time(),
-            "player_signal": player_signal.value,
-            "state_before": state.to_dict(),
-            "candidates": [action.value for action in top_actions],
-            "scores": {action.value: score.total_score for action, score in top_k},
-            "bandit_key": bandit_key,
-            "selected_action": selected_action,
-            "reward": reward,
-            "state_after": None  # Will update after transition
-        }
-        
-        # Apply state transition (simplified)
-        # In real system, use state_machine.apply_transition()
-        if selected_action_enum == NPCAction.COMPLIMENT or player_signal == PlayerSignal.COMPLIMENT:
-            state.affinity = min(1.0, state.affinity + 0.05)
-        elif selected_action_enum == NPCAction.INSULT or player_signal == PlayerSignal.INSULT:
-            state.affinity = max(-1.0, state.affinity - 0.1)
-        elif selected_action_enum == NPCAction.THREATEN or player_signal == PlayerSignal.THREATEN:
-            state.fear_level = min(1.0, state.fear_level + 0.15)
-        
-        # Update relationship tier based on affinity
-        if state.affinity < -0.6:
-            state.relationship = "enemy"
-        elif state.affinity < -0.2:
-            state.relationship = "rival"
-        elif state.affinity < 0.2:
-            state.relationship = "acquaintance"
-        elif state.affinity < 0.6:
-            state.relationship = "friend"
-        else:
-            state.relationship = "ally"
-        
-        turn_data["state_after"] = state.to_dict()
-        episode_data.append(turn_data)
-        
-        print(f"Selected Action: {selected_action}")
-        print(f"Reward: {reward:.2f}")
-    
-    # Save episode data
-    if output_file is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = f"data/episodes/{npc_id}_{timestamp}.jsonl"
-    
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_path, "w") as f:
-        for turn_data in episode_data:
-            f.write(json.dumps(turn_data) + "\n")
-    
-    print("\n" + "=" * 60)
-    print(f"Episode complete! Saved to: {output_path}")
-    print(f"Final state: affinity={state.affinity:.2f}, relationship={state.relationship}")
-    
-    # Print summary statistics
-    total_reward = sum(t["reward"] for t in episode_data)
-    avg_reward = total_reward / len(episode_data)
-    print(f"Average reward: {avg_reward:.3f}")
-    
-    return episode_data
-
-
-if __name__ == "__main__":
-    asyncio.run(run_episode("lydia_001", num_turns=100))
-```
-
-#### 2. Run the Episode
-
-```bash
-cd Python
-python run_episode.py
-```
-
-#### 3. Analyze Episode Data
-
-The episode data is saved in JSONL format (one JSON object per line). Each line contains:
-
-```json
-{
-  "turn": 1,
-  "timestamp": 1705456789.123,
-  "player_signal": "greet",
-  "state_before": {"mood": "neutral", "affinity": 0.0, ...},
-  "candidates": ["greet", "inquire", "ignore", "help"],
-  "scores": {"greet": 8.5, "inquire": 6.2, ...},
-  "bandit_key": "neutral|stranger|greet",
-  "selected_action": "greet",
-  "reward": 0.85,
-  "state_after": {"mood": "friendly", "affinity": 0.05, ...}
-}
-```
-
-#### 4. Visualize Episode Results
-
-Create `Python/analyze_episode.py`:
-
-```python
-"""
-Analyze and visualize episode data.
-"""
-import json
-import matplotlib.pyplot as plt
-from pathlib import Path
-
-def analyze_episode(episode_file: str):
-    """Load and analyze episode data."""
-    with open(episode_file, "r") as f:
-        episode = [json.loads(line) for line in f]
-    
-    turns = [t["turn"] for t in episode]
-    rewards = [t["reward"] for t in episode]
-    affinities = [t["state_after"]["affinity"] for t in episode]
-    
-    # Plot rewards over time
-    plt.figure(figsize=(12, 4))
-    
-    plt.subplot(1, 2, 1)
-    plt.plot(turns, rewards)
-    plt.xlabel("Turn")
-    plt.ylabel("Reward")
-    plt.title("Reward Over Time")
-    plt.grid(True, alpha=0.3)
-    
-    plt.subplot(1, 2, 2)
-    plt.plot(turns, affinities)
-    plt.xlabel("Turn")
-    plt.ylabel("Affinity")
-    plt.title("NPC Affinity Over Time")
-    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(episode_file.replace(".jsonl", "_analysis.png"))
-    print(f"Saved analysis plot: {episode_file.replace('.jsonl', '_analysis.png')}")
-    
-    # Print action distribution
-    actions = [t["selected_action"] for t in episode]
-    action_counts = {}
-    for action in actions:
-        action_counts[action] = action_counts.get(action, 0) + 1
-    
-    print("\nAction Distribution:")
-    for action, count in sorted(action_counts.items(), key=lambda x: x[1], reverse=True):
-        print(f"  {action}: {count} ({count/len(episode)*100:.1f}%)")
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1:
-        analyze_episode(sys.argv[1])
-    else:
-        print("Usage: python analyze_episode.py <episode.jsonl>")
-```
-
-Run analysis:
-
-```bash
-python analyze_episode.py data/episodes/lydia_001_20240116_123456.jsonl
-```
-
-#### 5. Integration Testing with Real Orchestrator
-
-For full end-to-end testing with the live orchestrator:
-
-```bash
-# Start orchestrator
-python launch_optimized.py
-
-# In another terminal, run episode via HTTP API
-python -c "
-import requests
-import json
-
-for i in range(100):
-    response = requests.post(
-        'http://localhost:8000/api/chat',
-        json={
-            'message': f'Turn {i+1} test message',
-            'npc_id': 'test_npc',
-            'context': {}
-        }
-    )
-    print(f'Turn {i+1}: {response.status_code}')
-"
-```
-
----
-
-## 📊 Monitoring
-
-### Dashboard Features
-
-- **Real-time Metrics** - First token, sentence, and total generation latency
-- **Queue Status** - Current size and dropped sentence count
-- **Performance Tuning** - Live adjustment of temperature, tokens, queue size
-- **Visual Feedback** - Glassmorphism UI with smooth animations
-
-### Metrics Available
-
-```javascript
-{
-  "first_token_ms": 1200,
-  "first_sentence_ms": 1500,
-  "total_generation_ms": 3000,
-  "tts_queue_size": 2,
-  "dropped_sentences": 0
-}
-```
+### Coverage
+
+| Category | Tests |
+|----------|-------|
+| Core Functionality | 180+ |
+| Learning Layer | 45+ |
+| World Model | 25+ |
+| Voice Router | 40+ |
+| **Total** | **290+** |
 
 ---
 
@@ -699,8 +303,7 @@ for i in range(100):
   "llm": {
     "backend": "ollama",
     "ollama_host": "http://localhost:11434",
-    "ollama_model": "llama3.2",
-    "llm_model_path": "Models/Mantella-Skyrim-Llama-3-8B-Q4_K_M.gguf"
+    "ollama_model": "llama3.2"
   },
   "tts": {
     "backend": "kokoro",
@@ -709,8 +312,7 @@ for i in range(100):
   },
   "temperature": 0.7,
   "max_tokens": 150,
-  "max_queue_size": 3,
-  "log_level": "INFO"
+  "max_queue_size": 3
 }
 ```
 
@@ -724,37 +326,60 @@ export RFSN_LOG_LEVEL=DEBUG
 
 ---
 
-## 🛠️ Development
-
-### Project Structure
+## 📁 Project Structure
 
 ```
-RFSN-ORCHESTRATOR/
+RFSN_NPC_CONTROLLER/
 ├── Python/
-│   ├── orchestrator.py           # FastAPI server
-│   ├── streaming_engine.py       # Core streaming logic
-│   ├── streaming_voice_system.py # DequeSpeechQueue (thread-safe)
-│   ├── runtime_state.py          # Atomic runtime management
-│   ├── version.py                # Canonical version strings
-│   ├── memory_manager.py         # Conversation persistence
-│   ├── piper_tts.py              # TTS engine
-│   ├── security.py               # Authentication
-│   ├── learning/                 # Contextual bandit layer
-│   │   ├── schemas.py            # ActionMode definitions
-│   │   ├── policy_adapter.py     # Feature extraction + action selection
-│   │   ├── reward_model.py       # Reward computation
-│   │   └── trainer.py            # Online weight updates
-│   ├── requirements.txt          # Dependencies
-│   └── tests/                    # Test suite (139 tests)
-├── Dashboard/
-│   └── index.html                # Metrics dashboard
-├── Models/
-│   └── piper/                    # Voice models
-├── config.json                   # Configuration
-└── README.md                     # This file
+│   ├── orchestrator.py         # FastAPI server
+│   ├── streaming_engine.py     # Core streaming logic
+│   ├── voice_router.py         # Dual-TTS routing
+│   ├── world_model.py          # State prediction
+│   ├── action_scorer.py        # Action evaluation
+│   ├── emotional_tone.py       # VAD emotional state
+│   ├── intent_extraction.py    # Hybrid NLU
+│   ├── learning/               # Contextual bandit layer
+│   │   ├── npc_action_bandit.py
+│   │   ├── temporal_memory.py
+│   │   ├── sentiment_tracker.py
+│   │   └── event_logger.py
+│   └── tests/                  # 290+ tests
+├── Dashboard/                  # Metrics visualization
+├── mobile_chat/                # iOS-optimized UI
+├── config.json                 # Configuration
+└── README.md
 ```
 
-### Contributing
+---
+
+## 📈 Changelog
+
+### v10.1 (Current) — Voice Router & Optimizations
+
+- **Dual-TTS Voice Router** with lazy loading and LRU cache
+- **Intensity-based routing** between Turbo and Full models
+- **Precomputation caching** for stable NPC states
+- 290+ tests with comprehensive voice routing coverage
+
+### v10.0 — Persistence & Emotional States
+
+- **Temporal Memory Persistence** across restarts
+- **VAD Emotional State** with time-based decay
+- **LLM Intent Classification** via Ollama
+- **Sentiment Tracking** with trend detection
+- **Adaptive Exploration** decay from 30% to 2%
+
+### v9.0 — Thread-Safe Queue Rewrite
+
+- **Deque+Condition queue** replaces queue.Queue
+- **Atomic drop policy** eliminates race conditions
+- **RuntimeState** for safe config hot-reloads
+
+[View Full Changelog](CHANGELOG.md)
+
+---
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -765,93 +390,22 @@ RFSN-ORCHESTRATOR/
 
 ---
 
-## 📈 Changelog
-
-### v10.0 (Latest) - Persistence, Emotional States & LLM Intent
-
-**New Features:**
-
-- **Temporal Memory Persistence** - Short-term experiences persist across restarts with 24h expiry
-- **Emotional State Persistence** - VAD emotional states saved with time-based decay on reload
-- **LLM Intent Classification** - Hybrid regex+Ollama intent extraction with graceful fallback
-- **Player Sentiment Tracker** - Longitudinal sentiment analysis with trend detection and volatility
-- **Learning Event Logger** - Thread-safe CSV logging for learning diagnostics
-- **Adaptive Exploration** - Exploration rate decays exponentially from 30% to 2%
-- **Visible Learning Demo** - Enhanced demo with emotional state visualization
-
-**Improvements:**
-
-- 274 tests (was 142) - comprehensive persistence, learning, and world model coverage
-- Orchestrator lifecycle hooks for save/load on shutdown/startup
-- HybridIntentGate replaces IntentGate for nuanced NLU
-- Configurable intent LLM settings in config.json
-
-### v9.0 - Thread-Safe Queue Rewrite
-
-- **Deque+Condition queue** replaces queue.Queue (eliminates race conditions)
-- Removed all task_done/join semantics
-- Drop policy runs atomically with consumer
-- Added `RuntimeState` for atomic config swaps
-- Added `version.py` for canonical versioning
-- Removed dead code (StreamingVoiceSystemV2)
-- Added `enable_queue` flag to Piper TTS
-
-### v8.10 - Critical Bug Fixes
-
-- Fixed `/ws/metrics` crash (missing `asdict` import)
-- Corrected end-of-stream flush semantics
-- Renamed `flush()` → `reset()`, added `flush_pending()`
-
-### v8.9 - Operational Hardening
-
-- Tokenizer continuation fix
-- Explicit end-of-stream flush
-- Stream hygiene improvements
-- `/api/health` endpoint
-- Structured trace logging
-
-### v8.8 - Backpressure & Resize Hardening
-
-- Coherent queue trimming (keep first/last)
-- Worker wakeup sentinel
-- Thread-safe resize operations
-
-### v8.7 - Reliability Hardening
-
-- Smart sentence boundary detection
-- Quote-aware tokenization
-- Newline boundary support
-
-[View Full Changelog](CHANGELOG.md)
-
----
-
-## 🤝 Acknowledgments
-
-- **LLaMA** - Meta's language model
-- **Piper TTS** - Rhasspy's neural TTS engine
-- **FastAPI** - Modern Python web framework
-
----
-
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details
-
----
-
-## 🔗 Links
-
-- **Repository**: [github.com/dawsonblock/RFSN-ORCHESTRATOR](https://github.com/dawsonblock/RFSN-ORCHESTRATOR)
-- **Issues**: [Report a bug](https://github.com/dawsonblock/RFSN-ORCHESTRATOR/issues)
-- **Discussions**: [Join the conversation](https://github.com/dawsonblock/RFSN-ORCHESTRATOR/discussions)
+MIT License — see [LICENSE](LICENSE) for details
 
 ---
 
 <div align="center">
 
+## 🔗 Links
+
+[**GitHub**](https://github.com/dawsonblock/RFSN_NPC_CONTROLLER) • [**Issues**](https://github.com/dawsonblock/RFSN_NPC_CONTROLLER/issues) • [**Discussions**](https://github.com/dawsonblock/RFSN_NPC_CONTROLLER/discussions)
+
+---
+
 **Made with ❤️ for immersive NPC interactions**
 
-⭐ Star this repo if you find it useful!
+⭐ **Star this repo if you find it useful!**
 
 </div>
