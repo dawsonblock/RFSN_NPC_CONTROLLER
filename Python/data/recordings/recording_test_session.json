@@ -1,26 +1,26 @@
 {
   "session_id": "test_session",
-  "start_time": 1769243825.7893991,
-  "end_time": 1769243825.792266,
+  "start_time": 1769374943.188992,
+  "end_time": 1769374943.19152,
   "event_count": 3,
   "events": [
     {
-      "event_id": "c0f19b309888d728",
+      "event_id": "5e28f0f599353b14",
       "event_type": "user_input",
-      "timestamp": 1769243825.7893991,
-      "datetime": "2026-01-24T02:37:05.789399",
-      "wall_clock_time": 1769243825.7893991,
+      "timestamp": 1769374943.188992,
+      "datetime": "2026-01-25T15:02:23.188992",
+      "wall_clock_time": 1769374943.188992,
       "checksum": "77283e86178dc1ff",
       "data": {
         "text": "Hello"
       }
     },
     {
-      "event_id": "6b07305f60808e56",
+      "event_id": "6b1864adb54c24fc",
       "event_type": "state_update",
-      "timestamp": 1769243825.7919118,
-      "datetime": "2026-01-24T02:37:05.791912",
-      "wall_clock_time": 1769243825.7919118,
+      "timestamp": 1769374943.19122,
+      "datetime": "2026-01-25T15:02:23.191220",
+      "wall_clock_time": 1769374943.19122,
       "checksum": "ad96a69a3e1582ba",
       "data": {
         "field": "affinity",
@@ -29,11 +29,11 @@
       }
     },
     {
-      "event_id": "3e67cb04e4c23a5a",
+      "event_id": "9618a99b6783024e",
       "event_type": "llm_generation",
-      "timestamp": 1769243825.792266,
-      "datetime": "2026-01-24T02:37:05.792266",
-      "wall_clock_time": 1769243825.792266,
+      "timestamp": 1769374943.19152,
+      "datetime": "2026-01-25T15:02:23.191520",
+      "wall_clock_time": 1769374943.19152,
       "checksum": "e34f8c25d1fa530b",
       "data": {
         "prompt": "Hello",
