@@ -2,13 +2,13 @@
 
 # 🎮 RFSN NPC Controller
 
-<img src="https://img.shields.io/badge/version-10.1-blueviolet?style=for-the-badge" alt="Version 10.1"/>
+<img src="https://img.shields.io/badge/version-10.2-blueviolet?style=for-the-badge" alt="Version 10.2"/>
 
 **Production-Ready Streaming AI System for Real-Time NPC Dialogue**
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/Tests-290%2B%20Passing-success?style=flat-square&logo=pytest)](Python/tests/)
+[![Tests](https://img.shields.io/badge/Tests-280%20Passing-success?style=flat-square&logo=pytest)](Python/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 [![Ollama](https://img.shields.io/badge/Ollama-LLM-black?style=flat-square)](https://ollama.ai/)
 
@@ -46,7 +46,8 @@
 
 ### 🛡️ Production Hardening
 
-- ✅ **290+ Tests** — Comprehensive coverage including streaming, learning, world model, and persistence
+- ✅ **280+ Tests** — Comprehensive coverage including streaming, learning, world model, and persistence
+- ✅ **Dot-Path Config** — Nested config access (`llm.temperature`) with hot-reload support
 - ✅ **Zero Race Conditions** — Deque+Condition queue pattern eliminates task_done/join bugs
 - ✅ **Atomic State Swaps** — RuntimeState prevents half-applied config during hot reloads
 - ✅ **Full Persistence** — Temporal memory, emotional states, and bandit weights survive restarts
@@ -108,7 +109,7 @@ docker run -p 8000:8000 rfsn-npc
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     RFSN NPC Controller v10.1                        │
+│                     RFSN NPC Controller v10.2                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
@@ -151,6 +152,8 @@ docker run -p 8000:8000 rfsn-npc
 | **Emotional State** | VAD modeling with decay | `Python/emotional_tone.py` |
 | **Sentiment Tracker** | Longitudinal player analysis | `Python/learning/sentiment_tracker.py` |
 | **Intent Extraction** | Hybrid LLM+regex classification | `Python/intent_extraction.py` |
+| **State Machine** | Invariant-validated state transitions | `Python/state_machine.py` |
+| **Hot Config** | Dot-path nested config with hot-reload | `Python/hot_config.py` |
 
 ---
 
@@ -286,11 +289,12 @@ pytest tests/test_production.py -v         # Production scenarios
 
 | Category | Tests |
 |----------|-------|
-| Core Functionality | 180+ |
+| Core Functionality | 165+ |
 | Learning Layer | 45+ |
 | World Model | 25+ |
-| Voice Router | 40+ |
-| **Total** | **290+** |
+| Voice Router | 30+ |
+| State Machine & Config | 15 |
+| **Total** | **280+** |
 
 ---
 
@@ -303,17 +307,26 @@ pytest tests/test_production.py -v         # Production scenarios
   "llm": {
     "backend": "ollama",
     "ollama_host": "http://localhost:11434",
-    "ollama_model": "llama3.2"
+    "ollama_model": "llama3.2",
+    "temperature": 0.7,
+    "max_tokens": 150
   },
   "tts": {
-    "backend": "kokoro",
-    "voice": "af_bella",
-    "speed": 1.0
+    "backend": "chatterbox",
+    "chatterbox": {
+      "device": "cuda",
+      "default_exaggeration": 0.5
+    }
   },
-  "temperature": 0.7,
-  "max_tokens": 150,
-  "max_queue_size": 3
+  "learning": {
+    "temporal_memory": { "enabled": true, "max_size": 50 },
+    "nuance_variants": { "enabled": true }
+  }
 }
+```
+
+**Dot-path access** — Access nested values with `config.get("llm.temperature")
+
 ```
 
 ### Environment Variables
@@ -354,12 +367,20 @@ RFSN_NPC_CONTROLLER/
 
 ## 📈 Changelog
 
-### v10.1 (Current) — Voice Router & Optimizations
+### v10.2 (Current) — Surgical Upgrade & Stabilization
+
+- **NPCAction Case Fix** — State machine now normalizes action case correctly
+- **Dot-Path Config** — Nested config access (`llm.temperature`) with hot-reload
+- **Prompt Consolidation** — Removed duplicate `prompting/` module (–692 LOC)
+- **IntentGate Optimization** — Per-sentence validation instead of per-chunk
+- **Reward Normalization** — Per-component logging with bounded output
+- 280+ tests with new state machine and config coverage
+
+### v10.1 — Voice Router & Optimizations
 
 - **Dual-TTS Voice Router** with lazy loading and LRU cache
 - **Intensity-based routing** between Turbo and Full models
 - **Precomputation caching** for stable NPC states
-- 290+ tests with comprehensive voice routing coverage
 
 ### v10.0 — Persistence & Emotional States
 
