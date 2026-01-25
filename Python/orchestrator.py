@@ -51,6 +51,9 @@ from learning import (
     FeatureVector, RewardSignals, TurnLog,
     NPCActionBandit, BanditKey
 )
+from learning.contextual_bandit import ContextualBandit, BanditContext
+from learning.mode_bandit import ModeBandit, PhrasingMode, ModeContext
+from learning.metrics_guard import MetricsGuard
 from learning.temporal_memory import TemporalMemory
 from learning.learning_contract import (
     LearningContract, LearningConstraints, StateSnapshot as LearningStateSnapshot,
@@ -826,45 +829,65 @@ async def stream_dialogue(request: DialogueRequest):
                 candidates = [s.action for s in action_scores[:TOP_K]]
                 
                 # Get npc_action_bandit from runtime
-                npc_action_bandit = runtime.get().npc_action_bandit
+                
+                # Get v1.3 bandits from runtime
+                contextual_bandit = runtime.get().contextual_bandit
+                mode_bandit = runtime.get().mode_bandit
                 temporal_memory = runtime.get().temporal_memory
                 
+                # Default mode if bandit missing
+                selected_phrasing_mode = PhrasingMode.NEUTRAL_BALANCED
+                
                 # Forced actions bypass learning (single candidate means forced)
-                if len(candidates) == 1 or not npc_action_bandit:
+                if len(candidates) == 1:
                     selected_npc_action = candidates[0]
                     selected_action_score = action_scores[0]
                 else:
-                    # Use bandit to select from candidates
-                    bandit_key = BanditKey.from_state(
-                        current_state_snapshot,
-                        player_signal,
-                    ).to_str()
-                    
-                    priors = {s.action: s.total_score for s in action_scores[:TOP_K]}
-                    
-                    # Get temporal adjustments (anticipatory bias from recent experiences)
-                    temporal_adjustments = None
-                    if temporal_memory:
-                        temporal_adjustments = temporal_memory.get_prior_adjustments(
-                            current_state_snapshot
+                    if contextual_bandit:
+                        # Build rich context for v1.3 learning
+                        bandit_ctx = BanditContext.from_state(
+                            mood=current_state_snapshot.emotional_state,
+                            affinity=current_state_snapshot.affinity,
+                            player_signal=player_signal,
+                            last_action=None,  # Ideally track this from history
+                            turn_count=len(memory.turns) if memory else 3,
+                            has_safety_flag=False # Safety flag handled by IntentGate separately
                         )
-                        if temporal_adjustments:
-                            logger.debug(
-                                f"Temporal adjustments: {', '.join(f'{a.value}={v:+.3f}' for a, v in temporal_adjustments.items())}"
-                            )
-                    
-                    selected_npc_action = npc_action_bandit.select(
-                        key=bandit_key,
-                        candidates=candidates,
-                        priors=priors,
-                        temporal_adjustments=temporal_adjustments,
-                    )
-                    
+                        
+                        # Use LinUCB scaling for priors
+                        # We pass priors implicitly via UCB bias or just rely on bandit
+                        selected_npc_action = contextual_bandit.select(
+                            context=bandit_ctx,
+                            candidates=candidates,
+                            log_counterfactual=True
+                        )
+                    else:
+                        # Fallback to score-based if no bandit
+                        selected_npc_action = candidates[0]
+
                     # Get the score for the selected action
                     selected_action_score = next(
                         (s for s in action_scores if s.action == selected_npc_action),
                         action_scores[0]
                     )
+
+                # Select Phrasing Mode (Two-Stage Policy)
+                if mode_bandit:
+                    # Determine personality from name/config (simplified map)
+                    npc_role = "generic"
+                    if "guard" in npc_name.lower(): npc_role = "guard"
+                    elif "merchant" in npc_name.lower(): npc_role = "merchant"
+                    elif "eris" in npc_name.lower(): npc_role = "companion" # Key NPC
+                    
+                    mode_ctx = ModeContext.from_state(
+                        affinity=current_state_snapshot.affinity,
+                        npc_role=npc_role,
+                        emotional_intensity=0.5, # Default, could derive from emotion components
+                        last_mode=None
+                    )
+                    
+                    selected_phrasing_mode = mode_bandit.select(mode_ctx)
+                    logger.info(f"Mode Bandit: Selected phrasing {selected_phrasing_mode.value}")
                 
                 logger.info(
                     f"World Model: Selected action {selected_npc_action.value} "
@@ -924,6 +947,11 @@ async def stream_dialogue(request: DialogueRequest):
     emotional_prompt = emotion_manager.get_prompt_injection(state.npc_name)
     system_prompt += f"\n\n{emotional_prompt}"
 
+    # Inject Phrasing Mode Instruction (Style Control)
+    if mode_bandit and selected_phrasing_mode:
+        phrasing_instr = mode_bandit.get_mode_instructions(selected_phrasing_mode)
+        system_prompt += f"\n\n{phrasing_instr}"
+
     # Require strict FINAL_JSON block (authoritative output contract)
     # This is the ONLY trusted source for memory storage and learning updates
     system_prompt += (
@@ -948,6 +976,9 @@ async def stream_dialogue(request: DialogueRequest):
 
     # Stream response
     async def stream_generator():
+        # Initialize learning flags
+        skip_learning = False
+        
         full_response = ""
         raw_response = ""
         first_chunk_sent = False
@@ -1288,44 +1319,91 @@ async def stream_dialogue(request: DialogueRequest):
                 logger.error(f"Learning layer error (reward/update): {e}")
         
         # Update NPC Action Bandit with reward signal
-        if bandit_key and selected_npc_action and selected_action_score:
-            npc_action_bandit = runtime.get().npc_action_bandit
+        # Update v1.3 Learning Layers
+        # Only update if learning is not skipped (Patch 003: FINAL_JSON verification)
+        if not skip_learning:
+            # Get components
+            contextual_bandit = runtime.get().contextual_bandit
+            mode_bandit = runtime.get().mode_bandit
+            metrics_guard = runtime.get().metrics_guard
+            reward_model = runtime.get().reward_model or RewardModel() # Ensure fallback
             temporal_memory = runtime.get().temporal_memory
-            if npc_action_bandit:
-                try:
-                    # Compute bandit reward (bounded [0, 1])
-                    # Base signal from scorer (normalized via sigmoid)
-                    import math
-                    def sigmoid(x: float) -> float:
-                        return 1.0 / (1.0 + math.exp(-x))
-                    
-                    # Base signal from action scorer
-                    base_reward = sigmoid(selected_action_score.total_score)
-                    
-                    # Add micro-rewards
-                    shaped_reward = base_reward + reward_accumulator.emit()
-                        
-                    # Clamp to [0, 1]
+            
+            try:
+                # 1. Compute Base Rewards
+                # Sigmoid normalization for score
+                import math
+                def sigmoid(x: float) -> float: return 1.0 / (1.0 + math.exp(-x))
+                base_reward = sigmoid(selected_action_score.total_score)
+                
+                # Add micro-rewards
+                shaped_reward = base_reward + reward_accumulator.emit()
+                
+                # 2. Check Ground-Truth Anchors (v1.3)
+                # Determine response time (latency)
+                latency_ms = 0.0
+                if 'latency' in locals():
+                    latency_ms = latency * 1000.0
+                
+                anchor_reward, anchor_type = reward_model.compute_ground_truth_anchor(
+                    user_text=request.user_input,
+                    response_time_ms=latency_ms
+                )
+                
+                if anchor_type != "none":
+                    final_reward = max(0.0, min(1.0, 0.5 + anchor_reward)) # Normalize anchor centered at 0.5
+                    logger.info(f"Learning Anchor Triggered: {anchor_type} -> reward={final_reward:.2f}")
+                else:
                     final_reward = max(0.0, min(1.0, shaped_reward))
+                
+                # 3. Update Metrics Guard
+                if metrics_guard:
+                    metrics_guard.record_turn(
+                        reward=final_reward,
+                        latency_ms=latency_ms,
+                        was_corrected=(anchor_type in ["thats_wrong", "repeat_question"]),
+                        was_blocked=False, # Safety blocks handled elsewhere
+                        npc_name=npc_name
+                    )
                     
-                    # Update bandit
-                    npc_action_bandit.update(bandit_key, selected_npc_action, final_reward)
+                    # Check safe mode
+                    if metrics_guard.is_frozen():
+                        logger.warning("Learning Frozen by Metrics Guard")
+                        return
+                        
+                # 4. Update Bandits
+                if contextual_bandit and selected_npc_action:
+                    # Reconstruct context
+                    bandit_ctx = BanditContext.from_state(
+                        mood=current_state_snapshot.emotional_state,
+                        affinity=current_state_snapshot.affinity,
+                        player_signal=player_signal,
+                        last_action=None,
+                        turn_count=len(memory.turns) if memory else 3,
+                        has_safety_flag=False
+                    )
+                    contextual_bandit.update(bandit_ctx, selected_npc_action, final_reward)
+                    contextual_bandit.save()
                     
-                    # Save periodically (every update for now)
-                    npc_action_bandit.save()
+                if mode_bandit and selected_phrasing_mode:
+                    mode_bandit.update(mode_ctx, selected_phrasing_mode, final_reward)
+                    mode_bandit.save()
                     
-                    # Record experience in temporal memory for anticipatory learning
-                    if temporal_memory and current_state_snapshot:
-                        temporal_memory.record(
-                            state=current_state_snapshot,
-                            action=selected_npc_action,
-                            reward=final_reward
-                        )
-                        logger.debug(f"Temporal memory recorded: action={selected_npc_action.value}, reward={final_reward:.2f}")
-                    
-                    logger.info(f"Bandit updated: action={selected_npc_action.value}, reward={final_reward:.2f}")
-                except Exception as e:
-                    logger.error(f"Bandit update error: {e}")
+                # 5. Temporal Memory
+                if temporal_memory and current_state_snapshot and selected_npc_action:
+                    temporal_memory.record(
+                        state=current_state_snapshot,
+                        action=selected_npc_action,
+                        reward=final_reward
+                    )
+                
+                logger.info(f"Learning Updated: action={selected_npc_action.value}, mode={selected_phrasing_mode.value}, reward={final_reward:.2f}")
+
+            except Exception as e:
+                logger.error(f"Learning update failed: {e}")
+        else:
+            logger.warning("Learning skipped due to unverified FINAL_JSON or quarantine")
+
         
         # Per-request Trace Log (Patch v8.9)
         trace_id = f"req_{int(start_time)}"
