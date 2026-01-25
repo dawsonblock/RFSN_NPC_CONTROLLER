@@ -107,7 +107,7 @@ class TestLinUCBArm:
         arm2 = LinUCBArm.from_dict(data)
         
         assert arm2.n == arm.n
-        assert np.allclose(arm2.A, arm.A)
+        assert np.allclose(arm2.A_inv, arm.A_inv)  # Sherman-Morrison uses A_inv
         assert np.allclose(arm2.b, arm.b)
 
 
