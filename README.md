@@ -2,13 +2,13 @@
 
 # 🎮 RFSN NPC Controller
 
-<img src="https://img.shields.io/badge/version-10.2-blueviolet?style=for-the-badge" alt="Version 10.2"/>
+<img src="https://img.shields.io/badge/version-1.3-blueviolet?style=for-the-badge" alt="Version 1.3"/>
 
 **Production-Ready Streaming AI System for Real-Time NPC Dialogue**
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/Tests-280%20Passing-success?style=flat-square&logo=pytest)](Python/tests/)
+[![Tests](https://img.shields.io/badge/Tests-297%20Passing-success?style=flat-square&logo=pytest)](Python/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 [![Ollama](https://img.shields.io/badge/Ollama-LLM-black?style=flat-square)](https://ollama.ai/)
 
@@ -29,11 +29,12 @@
 | Feature | Description |
 |---------|-------------|
 | **Semantic Action Selection** | World model predicts outcomes and scores 32 discrete NPC actions |
-| **Contextual Bandits** | Thompson sampling with adaptive exploration learns optimal dialogue styles |
+| **Contextual Bandits (v1.3)** | LinUCB with feature vectors (mood, affinity, phase) |
+| **Two-Stage Policy (v1.3)** | Separately learns *what* to do (action) and *how* to say it (phrasing) |
+| **Regression Guard (v1.3)** | Auto-freezes learning if correction/block rates exceed safety thresholds |
+| **Ground-Truth Anchors** | Deterministic rewards for explicit feedback ("That's wrong", "Thank you") |
 | **Temporal Memory** | Short-term experience buffer enables anticipatory reasoning |
 | **Hybrid NLU** | LLM-powered intent classification with regex fallback via Ollama |
-| **Emotional Modeling** | VAD-based (Valence/Arousal/Dominance) emotional state with decay |
-| **Sentiment Tracking** | Multi-player longitudinal sentiment analysis with trend detection |
 
 ### 🎙️ Voice & Speech
 
@@ -46,12 +47,12 @@
 
 ### 🛡️ Production Hardening
 
-- ✅ **280+ Tests** — Comprehensive coverage including streaming, learning, world model, and persistence
-- ✅ **Dot-Path Config** — Nested config access (`llm.temperature`) with hot-reload support
-- ✅ **Zero Race Conditions** — Deque+Condition queue pattern eliminates task_done/join bugs
-- ✅ **Atomic State Swaps** — RuntimeState prevents half-applied config during hot reloads
-- ✅ **Full Persistence** — Temporal memory, emotional states, and bandit weights survive restarts
-- ✅ **Safety Rules** — Hard overrides prevent learned stupidity in combat/trust/quest contexts
+| Feature | Description |
+|---------|-------------|
+| **Tests** | 297+ tests covering streaming, learning, safety, and persistence |
+| **Safety** | Hard overrides prevent learned stupidity in combat/trust/quest contexts |
+| **Consistency** | Atomic state swaps and strict JSON schema validation |
+| **Performance** | Zero race conditions via Deque+Condition pattern |
 
 ---
 
@@ -109,7 +110,7 @@ docker run -p 8000:8000 rfsn-npc
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     RFSN NPC Controller v10.2                        │
+│                     RFSN NPC Controller v1.3                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
@@ -131,8 +132,8 @@ docker run -p 8000:8000 rfsn-npc
 │         │                    │                       │              │
 │         ▼                    ▼                       ▼              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │   Bandit     │    │Action Scorer │    │  Sentiment Tracker   │  │
-│  │   Learner    │───▶│ (32 Actions) │◀───│  (Multi-Player)      │  │
+│  │  Contextual  │    │   Two-Stage  │    │   Metrics Guard      │  │
+│  │    Bandit    │───▶│    Policy    │◀───│  (Regression Guard)  │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -144,16 +145,12 @@ docker run -p 8000:8000 rfsn-npc
 |-----------|---------|----------|
 | **Orchestrator** | FastAPI server, lifecycle hooks | `Python/orchestrator.py` |
 | **Streaming Engine** | Token processing, sentence detection | `Python/streaming_engine.py` |
-| **Voice Router** | Dual-TTS with lazy load, LRU cache | `Python/voice_router.py` |
+| **Contextual Bandit** | LinUCB learner for actions | `Python/learning/contextual_bandit.py` |
+| **Mode Bandit** | Phrasing style learner | `Python/learning/mode_bandit.py` |
+| **Metrics Guard** | Regression monitoring | `Python/learning/metrics_guard.py` |
 | **World Model** | Predicts state transitions | `Python/world_model.py` |
 | **Action Scorer** | Scores 32 candidate actions | `Python/action_scorer.py` |
-| **NPC Action Bandit** | Thompson sampling learner | `Python/learning/npc_action_bandit.py` |
-| **Temporal Memory** | Short-term experience buffer | `Python/learning/temporal_memory.py` |
-| **Emotional State** | VAD modeling with decay | `Python/emotional_tone.py` |
-| **Sentiment Tracker** | Longitudinal player analysis | `Python/learning/sentiment_tracker.py` |
-| **Intent Extraction** | Hybrid LLM+regex classification | `Python/intent_extraction.py` |
-| **State Machine** | Invariant-validated state transitions | `Python/state_machine.py` |
-| **Hot Config** | Dot-path nested config with hot-reload | `Python/hot_config.py` |
+| **Voice Router** | Dual-TTS with lazy load, LRU cache | `Python/voice_router.py` |
 
 ---
 
@@ -173,7 +170,7 @@ Content-Type: application/json
 
 **Response**: Server-Sent Events (SSE)
 
-```
+```json
 data: {"sentence": "Whiterun is a great city.", "is_final": false, "latency_ms": 150}
 data: {"sentence": "We welcome all travelers.", "is_final": true, "latency_ms": 280}
 ```
@@ -186,31 +183,18 @@ POST /api/memory/{npc_name}/safe_reset  # Reset with backup
 GET  /api/memory/{npc_name}/backups     # List available backups
 ```
 
-### Performance Tuning
-
-```http
-POST /api/tune-performance
-{
-  "temperature": 0.7,
-  "max_tokens": 150,
-  "max_queue_size": 3
-}
-```
-
-### Health & Metrics
-
-```http
-GET /api/health           # Health check
-WS  /ws/metrics           # WebSocket metrics stream
-```
-
 ---
 
-## 🤖 Learning Layer
+## 🤖 Learning Layer (v1.3)
 
-### Contextual Bandit
+### Contextual Bandit (LinUCB)
 
-The system uses Thompson sampling with adaptive exploration to learn optimal dialogue styles per NPC:
+Learns optimal actions using rich feature vectors (Mood, Affinity, Phase, Safety). Uses **counterfactual logging** for offline analysis.
+
+### Two-Stage Policy
+
+1. **Action Bandit**: Selects *WHAT* to do (e.g., `GREET`, `OFFER`).
+2. **Mode Bandit**: Selects *HOW* to say it.
 
 | Mode | Description |
 |------|-------------|
@@ -218,57 +202,14 @@ The system uses Thompson sampling with adaptive exploration to learn optimal dia
 | `WARM_FRIENDLY` | Empathetic, relational responses |
 | `LORE_RICH` | Detailed world-building responses |
 | `PLAYFUL_WITTY` | Humorous, light-hearted responses |
-| `FORMAL_RESPECTFUL` | Distant, proper responses |
 | `NEUTRAL_BALANCED` | Default balanced approach |
 
-### Safety Rules
+### Regression Guard
 
-Hard overrides prevent learned stupidity:
+Protect the model from bad updates:
 
-| Condition | Override |
-|-----------|----------|
-| **Combat + Fear > 0.7** | Forces `FLEE` action |
-| **Trust < 0.1** | Forbids `ACCEPT`, `OFFER`, `HELP` |
-| **Quest Active** | Biases toward `HELP`, `AGREE` |
-
----
-
-## 🎙️ Voice Router
-
-Intelligent dual-TTS engine with automatic model selection:
-
-| Intensity | Engine | Use Case | Exaggeration |
-|-----------|--------|----------|--------------|
-| **LOW** | Chatterbox-Turbo | Guards, shopkeepers, barks | 0.3 |
-| **MEDIUM** | Chatterbox-Turbo | Companion casual chat | 0.6 |
-| **HIGH** | Chatterbox-Full | Memory callbacks, relationship moments | 0.8 |
-
-**Optimizations:**
-
-- 🚀 **Lazy Loading** — Full model loaded only when needed
-- 💾 **LRU Cache** — 100 clips with 5-minute TTL
-- ⚡ **Precompute** — Intensity cached for 5 seconds
-- 🔄 **Fallback** — Graceful Kokoro degradation
-
----
-
-## ⚡ Performance
-
-### Benchmarks
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| First Token Latency | <1.5s | ~1.2s |
-| Sentence Detection | <50ms | ~30ms |
-| TTS Processing | <100ms | ~80ms |
-| Queue Throughput | 10/s | 12/s |
-
-### Optimizations
-
-- **Deque+Condition Queue** — Eliminates race conditions
-- **Atomic Drop Policy** — Drop runs under same lock as worker
-- **Pre-compiled Regex** — No hot-path compilation overhead
-- **Config Snapshots** — Per-request snapshots prevent mid-stream changes
+- **Freeze**: If User Correction Rate > 25%
+- **Reduce**: If Reward drops > 15%
 
 ---
 
@@ -279,135 +220,9 @@ Intelligent dual-TTS engine with automatic model selection:
 cd Python && python -m pytest tests/ -v
 
 # Specific categories
-pytest tests/test_learning*.py -v          # Learning layer
-pytest tests/test_world_model*.py -v       # World model
-pytest tests/test_voice_router.py -v       # Voice routing
+pytest tests/test_learning_depth.py -v     # v1.3 Learning tests
 pytest tests/test_production.py -v         # Production scenarios
 ```
-
-### Coverage
-
-| Category | Tests |
-|----------|-------|
-| Core Functionality | 165+ |
-| Learning Layer | 45+ |
-| World Model | 25+ |
-| Voice Router | 30+ |
-| State Machine & Config | 15 |
-| **Total** | **280+** |
-
----
-
-## 🔧 Configuration
-
-### `config.json`
-
-```json
-{
-  "llm": {
-    "backend": "ollama",
-    "ollama_host": "http://localhost:11434",
-    "ollama_model": "llama3.2",
-    "temperature": 0.7,
-    "max_tokens": 150
-  },
-  "tts": {
-    "backend": "chatterbox",
-    "chatterbox": {
-      "device": "cuda",
-      "default_exaggeration": 0.5
-    }
-  },
-  "learning": {
-    "temporal_memory": { "enabled": true, "max_size": 50 },
-    "nuance_variants": { "enabled": true }
-  }
-}
-```
-
-**Dot-path access** — Access nested values with `config.get("llm.temperature")
-
-```
-
-### Environment Variables
-
-```bash
-export RFSN_PORT=8000
-export RFSN_HOST=0.0.0.0
-export RFSN_LOG_LEVEL=DEBUG
-```
-
----
-
-## 📁 Project Structure
-
-```
-RFSN_NPC_CONTROLLER/
-├── Python/
-│   ├── orchestrator.py         # FastAPI server
-│   ├── streaming_engine.py     # Core streaming logic
-│   ├── voice_router.py         # Dual-TTS routing
-│   ├── world_model.py          # State prediction
-│   ├── action_scorer.py        # Action evaluation
-│   ├── emotional_tone.py       # VAD emotional state
-│   ├── intent_extraction.py    # Hybrid NLU
-│   ├── learning/               # Contextual bandit layer
-│   │   ├── npc_action_bandit.py
-│   │   ├── temporal_memory.py
-│   │   ├── sentiment_tracker.py
-│   │   └── event_logger.py
-│   └── tests/                  # 290+ tests
-├── Dashboard/                  # Metrics visualization
-├── mobile_chat/                # iOS-optimized UI
-├── config.json                 # Configuration
-└── README.md
-```
-
----
-
-## 📈 Changelog
-
-### v10.2 (Current) — Surgical Upgrade & Stabilization
-
-- **NPCAction Case Fix** — State machine now normalizes action case correctly
-- **Dot-Path Config** — Nested config access (`llm.temperature`) with hot-reload
-- **Prompt Consolidation** — Removed duplicate `prompting/` module (–692 LOC)
-- **IntentGate Optimization** — Per-sentence validation instead of per-chunk
-- **Reward Normalization** — Per-component logging with bounded output
-- 280+ tests with new state machine and config coverage
-
-### v10.1 — Voice Router & Optimizations
-
-- **Dual-TTS Voice Router** with lazy loading and LRU cache
-- **Intensity-based routing** between Turbo and Full models
-- **Precomputation caching** for stable NPC states
-
-### v10.0 — Persistence & Emotional States
-
-- **Temporal Memory Persistence** across restarts
-- **VAD Emotional State** with time-based decay
-- **LLM Intent Classification** via Ollama
-- **Sentiment Tracking** with trend detection
-- **Adaptive Exploration** decay from 30% to 2%
-
-### v9.0 — Thread-Safe Queue Rewrite
-
-- **Deque+Condition queue** replaces queue.Queue
-- **Atomic drop policy** eliminates race conditions
-- **RuntimeState** for safe config hot-reloads
-
-[View Full Changelog](CHANGELOG.md)
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`pytest tests/ -v`)
-4. Commit changes (`git commit -m 'Add amazing feature'`)
-5. Push to branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
 
 ---
 
