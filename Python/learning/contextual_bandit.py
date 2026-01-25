@@ -16,6 +16,9 @@ from enum import Enum
 
 from world_model import NPCAction, PlayerSignal
 
+import logging
+logger = logging.getLogger("learning.bandit")
+
 
 class ConversationPhase(Enum):
     """Phase of the conversation."""
@@ -89,6 +92,13 @@ class BanditContext:
             has_safety_flag=has_safety_flag,
             turn_count=turn_count
         )
+
+    def get_id(self) -> str:
+        """Get deterministic hash ID for this context."""
+        import hashlib
+        # Stable sorting of buckets to ensure consistent ID
+        raw = f"{self.mood_bucket}|{self.affinity_bucket}|{self.player_signal}|{self.conversation_phase}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
     
     def to_feature_vector(self) -> np.ndarray:
         """
@@ -137,20 +147,21 @@ class BanditContext:
 @dataclass
 class LinUCBArm:
     """
-    LinUCB arm with online linear regression.
+    LinUCB arm with online linear regression using Sherman-Morrison optimization.
     
-    Maintains A matrix (d x d) and b vector (d) for each arm.
-    θ = A^-1 * b is the weight vector.
-    UCB = θᵀx + α * sqrt(xᵀ A^-1 x)
+    Instead of inverting A (O(d^3)) every step, we maintain A_inv directly
+    and update it with Rank-1 updates (O(d^2)).
+    
+    A_inv = (A + xx^T)^-1 = A^-1 - (A^-1 x x^T A^-1) / (1 + x^T A^-1 x)
     """
     dim: int
-    A: np.ndarray = field(default=None)
+    A_inv: np.ndarray = field(default=None) # Store INVERSE directly
     b: np.ndarray = field(default=None)
     n: int = 0
     
     def __post_init__(self):
-        if self.A is None:
-            self.A = np.eye(self.dim, dtype=np.float64)
+        if self.A_inv is None:
+            self.A_inv = np.eye(self.dim, dtype=np.float64)
         if self.b is None:
             self.b = np.zeros(self.dim, dtype=np.float64)
     
@@ -159,26 +170,38 @@ class LinUCBArm:
         Compute UCB score for this arm given context x.
         
         UCB = θᵀx + α * sqrt(xᵀ A^-1 x)
+        θ = A^-1 * b
         """
-        A_inv = np.linalg.inv(self.A)
-        theta = A_inv @ self.b
+        # Theta computation is now O(d^2)
+        theta = self.A_inv @ self.b
         
         # Expected reward
         expected = theta @ x
         
         # Exploration bonus
-        uncertainty = alpha * math.sqrt(x @ A_inv @ x)
+        # x^T A^-1 x  is O(d^2)
+        uncertainty = alpha * math.sqrt(x @ self.A_inv @ x)
         
         return expected + uncertainty
     
     def update(self, x: np.ndarray, reward: float) -> None:
         """
-        Update arm parameters with observed reward.
-        
-        A = A + xxᵀ
-        b = b + r*x
+        Update arm parameters with observed reward using Sherman-Morrison.
+        Complexity: O(d^2)
         """
-        self.A += np.outer(x, x)
+        # Sherman-Morrison Update for A_inv
+        # num = (A_inv @ x) @ (x.T @ A_inv)  -> outer product
+        # den = 1 + x.T @ A_inv @ x
+        
+        A_inv_x = self.A_inv @ x
+        denom = 1.0 + x @ A_inv_x
+        
+        # Outer product (d x d)
+        numerator = np.outer(A_inv_x, A_inv_x)
+        
+        self.A_inv -= numerator / denom
+        
+        # Update b
         self.b += reward * x
         self.n += 1
     
@@ -186,7 +209,7 @@ class LinUCBArm:
         """Serialize to dict for persistence."""
         return {
             "dim": self.dim,
-            "A": self.A.tolist(),
+            "A_inv": self.A_inv.tolist(), # Save inverse
             "b": self.b.tolist(),
             "n": self.n
         }
@@ -195,7 +218,14 @@ class LinUCBArm:
     def from_dict(cls, data: Dict[str, Any]) -> "LinUCBArm":
         """Deserialize from dict."""
         arm = cls(dim=data["dim"])
-        arm.A = np.array(data["A"], dtype=np.float64)
+        # Support migration from legacy 'A' if present, usually we'd invert it once
+        if "A_inv" in data:
+             arm.A_inv = np.array(data["A_inv"], dtype=np.float64)
+        elif "A" in data:
+             # Migration path: Invert legacy A
+             A = np.array(data["A"], dtype=np.float64)
+             arm.A_inv = np.linalg.inv(A)
+             
         arm.b = np.array(data["b"], dtype=np.float64)
         arm.n = data.get("n", 0)
         return arm
@@ -269,6 +299,13 @@ class ContextualBandit:
         # Sort by UCB score (descending)
         scores.sort(key=lambda t: t[1], reverse=True)
         
+        # Debug logging
+        logger.debug(
+            f"[BANDIT SELECT] context_id={context.get_id()} "
+            f"top3={[(a.value, round(s, 3)) for a, s in scores[:3]]} "
+            f"chosen={scores[0][0].value}"
+        )
+        
         # Log counterfactual (top-K)
         if log_counterfactual and len(scores) > 1:
             self._log_counterfactual(context, scores[:5])
@@ -294,6 +331,12 @@ class ContextualBandit:
         
         arm = self._get_arm(action)
         arm.update(x, reward)
+        
+        # Debug logging
+        logger.debug(
+            f"[BANDIT UPDATE] context_id={context.get_id()} "
+            f"action={action.value} reward={reward:.3f} arm_n={arm.n}"
+        )
     
     def _log_counterfactual(
         self,
@@ -325,8 +368,8 @@ class ContextualBandit:
         """Get bandit statistics."""
         stats = {}
         for name, arm in self._arms.items():
-            A_inv = np.linalg.inv(arm.A)
-            theta = A_inv @ arm.b
+            # Theta = A_inv * b
+            theta = arm.A_inv @ arm.b
             stats[name] = {
                 "trials": arm.n,
                 "weights_norm": float(np.linalg.norm(theta)),

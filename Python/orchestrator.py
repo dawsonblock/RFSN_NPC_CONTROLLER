@@ -28,8 +28,10 @@ from learning.learning_contract import (
 from reward_shaping import RewardAccumulator
 
 # Import core modules
-from streaming_engine import StreamingMantellaEngine, StreamingMetrics, RFSNState
-from kokoro_tts import KokoroTTSEngine, setup_kokoro_voice
+# Import core modules
+from streaming_engine import RFSNState, StreamingMetrics # Keep types top-level
+# Lazy loaded in startup: StreamingMantellaEngine
+# Lazy loaded in startup: KokoroTTSEngine, setup_kokoro_voice
 from voice_router import VoiceRouter, VoiceRequest, VoiceIntensity, VoiceConfig
 from ollama_client import OllamaClient, ensure_ollama_ready
 from memory_manager import ConversationManager, list_backups
@@ -41,7 +43,7 @@ from structured_logging import configure_logging, get_logger, RequestLoggingMidd
 from multi_npc import MultiNPCManager
 from prometheus_metrics import router as metrics_router, registry, inc_requests, inc_errors, observe_request_duration, inc_tokens, observe_first_token
 from hot_config import init_config, get_config
-from xvasynth_engine import XVASynthEngine
+# Lazy loaded: XVASynthEngine
 
 # Import learning layer
 from learning import (
@@ -123,10 +125,10 @@ app.include_router(metrics_router, tags=["monitoring"])
 
 # Global instances - wrapped by runtime for atomic swaps
 runtime = Runtime()
-streaming_engine: Optional[StreamingMantellaEngine] = None
-tts_engine: Optional[KokoroTTSEngine] = None
+streaming_engine: Optional["StreamingMantellaEngine"] = None  # Lazy loaded
+tts_engine: Optional["KokoroTTSEngine"] = None  # Lazy loaded
 voice_router: Optional[VoiceRouter] = None  # Dual-TTS router (Chatterbox-Turbo + Full)
-xva_engine: Optional[XVASynthEngine] = None
+xva_engine: Optional["XVASynthEngine"] = None  # Lazy loaded
 multi_manager = MultiNPCManager()
 active_ws: List[WebSocket] = []
 conversation_managers: Dict[str, ConversationManager] = {}
@@ -165,6 +167,7 @@ async def startup_event():
     
     # Setup xVASynth (legacy support)
     if config_watcher.get("xvasynth_enabled", False):
+        from xvasynth_engine import XVASynthEngine
         xva_engine = XVASynthEngine()
         logger.info(f"xVASynth initialized (Available: {xva_engine.available})")
 
@@ -184,6 +187,7 @@ async def startup_event():
             # Auto-download if not present
             if not Path(model_path).exists() or not Path(voices_path).exists():
                 logger.info("[Kokoro] Model not found, downloading...")
+                from kokoro_tts import setup_kokoro_voice
                 model_path, voices_path = setup_kokoro_voice()
             
             if model_path and voices_path:
@@ -192,6 +196,7 @@ async def startup_event():
                 q_size = tts_config.get("max_queue_size", 10)
                 
                 logger.info(f"Setting up Kokoro TTS: voice={voice}, speed={tts_speed}")
+                from kokoro_tts import KokoroTTSEngine
                 tts_engine = KokoroTTSEngine(
                     model_path=model_path,
                     voices_path=voices_path,
@@ -213,6 +218,7 @@ async def startup_event():
     
     if os.environ.get("SKIP_MODELS"):
         logger.info("Using MOCK LLM (SKIP_MODELS set)")
+        from streaming_engine import StreamingMantellaEngine
         streaming_engine = StreamingMantellaEngine(backend="mock")
     elif llm_backend == "ollama":
         # Ollama backend
@@ -222,6 +228,7 @@ async def startup_event():
             "temperature": llm_config.get("temperature", 0.7),
             "max_tokens": llm_config.get("max_tokens", 150)
         }
+        from streaming_engine import StreamingMantellaEngine
         streaming_engine = StreamingMantellaEngine(
             backend="ollama",
             ollama_config=ollama_config
@@ -235,8 +242,11 @@ async def startup_event():
         
         if resolved is None:
             logger.error(f"Configured model_path not found: {cfg_model_path}")
+            # streaming_engine = StreamingMantellaEngine(backend="mock") # Fallback
+            from streaming_engine import StreamingMantellaEngine
             streaming_engine = StreamingMantellaEngine(backend="mock")
         else:
+            from streaming_engine import StreamingMantellaEngine
             streaming_engine = StreamingMantellaEngine(
                 model_path=str(resolved),
                 backend="llama_cpp"

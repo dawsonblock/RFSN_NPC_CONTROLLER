@@ -23,9 +23,19 @@ from event_recorder import EventRecorder, EventType
 from llm_action_prompts import render_action_block
 from emotional_tone import get_emotion_manager
 from intent_extraction import IntentType, SafetyFlag, IntentExtractor
+from intent_extraction import IntentType, SafetyFlag, IntentExtractor
 from streaming_engine import RFSNState
+# New Learning Modules
+from learning.state_abstraction import StateAbstractor
+from learning.action_trace import ActionTracer
+from learning.reward_signal import RewardChannel
 
 logger = logging.getLogger("orchestrator")
+
+# --- Debug Logging Helpers ---
+def _log_decision(npc_name: str, step: str, details: Dict[str, Any]):
+    """Structured debug log for decision tracing."""
+    logger.debug(f"[DECISION] [{npc_name}] {step}: {json.dumps(details, default=str)}")
 
 def _extract_tail_json_payload(raw_text: str) -> tuple[Optional[Dict[str, Any]], bool]:
     """
@@ -121,6 +131,11 @@ def _map_action_to_instruction(action: NPCAction) -> str:
 # Singleton instances for state management
 conversation_managers: Dict[str, ConversationManager] = {}
 
+# Learning Components (Singleton-ish for now)
+state_abstractor = StateAbstractor()
+action_tracer = ActionTracer(trace_length=5)
+reward_channel = RewardChannel()
+
 class DialogueService:
     def __init__(self, runtime: Runtime, config_watcher: Any, multi_manager: MultiNPCManager):
         self.runtime = runtime
@@ -184,7 +199,12 @@ class DialogueService:
                 
                 features = policy_adapter.build_features(rfsn_state, retrieval_stats, convo_stats)
                 action_mode = policy_adapter.choose_action_mode(features)
-                logger.info(f"Learning: Selected action mode {action_mode.name}")
+                
+                # Use StateAbstractor for logging/tracing
+                abstract_key = state_abstractor.abstract(rfsn_state)
+                context_id = state_abstractor.get_context_id(rfsn_state)
+                
+                logger.info(f"Learning: Selected action mode {action_mode.name} (Abstract: {abstract_key})")
             except Exception as e:
                 logger.error(f"Learning layer error (feature extraction): {e}")
 
@@ -451,6 +471,11 @@ class DialogueService:
             contextual_bandit = rt.contextual_bandit
             mode_bandit = rt.mode_bandit
             
+            # Check implicit AND explicit rewards
+            # 1. Check explicit channel
+            # (In production, this might be async/batched, but we check specific pending rewards here if we tracked IDs)
+            # For now, we assume simple immediate feedback isn't here yet, relying on implicit.
+            
             # Ground-truth anchor
             # Explicitly import if needed, but imported at top
             reward_model = rt.reward_model or RewardModel()
@@ -461,6 +486,15 @@ class DialogueService:
             
             if anchor_type != "none":
                 final_reward = anchor_reward
+            
+            # Record trace for delayed credit
+            if selected_npc_action and 'context_id' in locals():
+                action_tracer.record_step(
+                    context_id=context_id,
+                    action=selected_npc_action.value,
+                    state_snapshot=asdict(current_state_snapshot),
+                    metadata={"reward": final_reward, "abstract_key": abstract_key}
+                )
 
             if contextual_bandit and selected_npc_action and 'bandit_ctx' in locals():
                 contextual_bandit.update(bandit_ctx, selected_npc_action, final_reward)

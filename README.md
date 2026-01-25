@@ -2,7 +2,7 @@
 
 # 🎮 RFSN NPC Controller
 
-<img src="https://img.shields.io/badge/version-1.3-blueviolet?style=for-the-badge" alt="Version 1.3"/>
+<img src="https://img.shields.io/badge/version-1.4-blueviolet?style=for-the-badge" alt="Version 1.4"/>
 
 **Production-Ready Streaming AI System for Real-Time NPC Dialogue**
 
@@ -29,19 +29,20 @@
 | Feature | Description |
 |---------|-------------|
 | **Semantic Action Selection** | World model predicts outcomes and scores 32 discrete NPC actions |
-| **Contextual Bandits (v1.3)** | LinUCB with feature vectors (mood, affinity, phase) |
-| **Two-Stage Policy (v1.3)** | Separately learns *what* to do (action) and *how* to say it (phrasing) |
-| **Regression Guard (v1.3)** | Auto-freezes learning if correction/block rates exceed safety thresholds |
+| **Contextual Bandits (v1.4)** | LinUCB with **Sherman-Morrison optimization** (O(d²) updates) |
+| **Hierarchical State Abstraction** | Maps raw state to compact categorical keys for faster learning |
+| **N-Step Action Traces** | Temporal credit assignment for delayed rewards |
+| **Two-Stage Policy** | Separately learns *what* to do (action) and *how* to say it (phrasing) |
+| **Explicit Reward Channel** | External feedback injection (quest completions, UI buttons) |
+| **Regression Guard** | Auto-freezes learning if correction/block rates exceed safety thresholds |
 | **Ground-Truth Anchors** | Deterministic rewards for explicit feedback ("That's wrong", "Thank you") |
-| **Temporal Memory** | Short-term experience buffer enables anticipatory reasoning |
-| **Hybrid NLU** | LLM-powered intent classification with regex fallback via Ollama |
 
 ### 🎙️ Voice & Speech
 
 | Feature | Description |
 |---------|-------------|
 | **Dual TTS Router** | Chatterbox-Turbo + Chatterbox-Full with automatic intensity-based selection |
-| **Lazy Model Loading** | Full model (~2GB VRAM) loaded only on first HIGH intensity request |
+| **Lazy Model Loading** | TTS/LLM engines loaded on first use (faster startup) |
 | **LRU Audio Cache** | 100 clips, 5-min TTL for repeated lines |
 | **Kokoro Fallback** | Graceful CPU-only degradation when CUDA unavailable |
 
@@ -51,8 +52,8 @@
 |---------|-------------|
 | **Tests** | 297+ tests covering streaming, learning, safety, and persistence |
 | **Safety** | Hard overrides prevent learned stupidity in combat/trust/quest contexts |
-| **Consistency** | Atomic state swaps and strict JSON schema validation |
-| **Performance** | Zero race conditions via Deque+Condition pattern |
+| **Debug Logging** | Structured `[BANDIT SELECT]` and `[BANDIT UPDATE]` logs for decision tracing |
+| **Modular Architecture** | Routers, Services, and Learning modules cleanly separated |
 
 ---
 
@@ -97,43 +98,36 @@ python -m uvicorn orchestrator:app --host 0.0.0.0 --port 8000
 | **Dashboard** | `http://localhost:8000` |
 | **Mobile UI** | `http://localhost:8080` (run `python mobile_chat/server.py`) |
 
-### Docker
-
-```bash
-docker build -t rfsn-npc .
-docker run -p 8000:8000 rfsn-npc
-```
-
 ---
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     RFSN NPC Controller v1.3                        │
+│                     RFSN NPC Controller v1.4                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
 │  │   FastAPI    │───▶│  Streaming   │───▶│   Voice Router       │  │
-│  │   Server     │    │   Engine     │    │  (Turbo/Full/Kokoro) │  │
+│  │   Routers    │    │   Engine     │    │  (Turbo/Full/Kokoro) │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │         │                    │                       │              │
 │         ▼                    ▼                       ▼              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │   Hybrid     │    │ DequeSpeech  │    │    Audio Player      │  │
-│  │   NLU Gate   │    │    Queue     │    │    (Async/Stream)    │  │
+│  │   Dialogue   │    │ DequeSpeech  │    │    Audio Player      │  │
+│  │   Service    │    │    Queue     │    │    (Async/Stream)    │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │         │                    │                                      │
 │         ▼                    ▼                                      │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │   Temporal   │    │ World Model  │    │   Emotional State    │  │
-│  │   Memory     │───▶│ (Prediction) │◀───│   (VAD + Decay)      │  │
+│  │    State     │    │ World Model  │    │   Emotional State    │  │
+│  │  Abstractor  │───▶│ (Prediction) │◀───│   (VAD + Decay)      │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │         │                    │                       │              │
 │         ▼                    ▼                       ▼              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │  Contextual  │    │   Two-Stage  │    │   Metrics Guard      │  │
-│  │    Bandit    │───▶│    Policy    │◀───│  (Regression Guard)  │  │
+│  │  Contextual  │    │   Action     │    │   Metrics Guard      │  │
+│  │    Bandit    │───▶│   Tracer     │◀───│  (Regression Guard)  │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -144,13 +138,13 @@ docker run -p 8000:8000 rfsn-npc
 | Component | Purpose | Location |
 |-----------|---------|----------|
 | **Orchestrator** | FastAPI server, lifecycle hooks | `Python/orchestrator.py` |
-| **Streaming Engine** | Token processing, sentence detection | `Python/streaming_engine.py` |
-| **Contextual Bandit** | LinUCB learner for actions | `Python/learning/contextual_bandit.py` |
+| **Dialogue Service** | Core dialogue pipeline | `Python/services/dialogue_service.py` |
+| **State Abstractor** | Hierarchical state compression | `Python/learning/state_abstraction.py` |
+| **Action Tracer** | N-step temporal credit | `Python/learning/action_trace.py` |
+| **Reward Channel** | Explicit reward injection | `Python/learning/reward_signal.py` |
+| **Contextual Bandit** | LinUCB (Sherman-Morrison) | `Python/learning/contextual_bandit.py` |
 | **Mode Bandit** | Phrasing style learner | `Python/learning/mode_bandit.py` |
-| **Metrics Guard** | Regression monitoring | `Python/learning/metrics_guard.py` |
 | **World Model** | Predicts state transitions | `Python/world_model.py` |
-| **Action Scorer** | Scores 32 candidate actions | `Python/action_scorer.py` |
-| **Voice Router** | Dual-TTS with lazy load, LRU cache | `Python/voice_router.py` |
 
 ---
 
@@ -185,11 +179,19 @@ GET  /api/memory/{npc_name}/backups     # List available backups
 
 ---
 
-## 🤖 Learning Layer (v1.3)
+## 🤖 Learning Layer (v1.4)
 
 ### Contextual Bandit (LinUCB)
 
-Learns optimal actions using rich feature vectors (Mood, Affinity, Phase, Safety). Uses **counterfactual logging** for offline analysis.
+Learns optimal actions using rich feature vectors. Uses **Sherman-Morrison formula** for O(d²) updates instead of O(d³) matrix inversion.
+
+### Hierarchical State Abstraction
+
+Raw state (affinity, mood, turn count, etc.) → Compact categorical key → Feature vector.
+
+### N-Step Action Traces
+
+Rolling buffer of (state, action, reward) tuples enables delayed credit assignment.
 
 ### Two-Stage Policy
 
@@ -204,25 +206,23 @@ Learns optimal actions using rich feature vectors (Mood, Affinity, Phase, Safety
 | `PLAYFUL_WITTY` | Humorous, light-hearted responses |
 | `NEUTRAL_BALANCED` | Default balanced approach |
 
-### Regression Guard
-
-Protect the model from bad updates:
-
-- **Freeze**: If User Correction Rate > 25%
-- **Reduce**: If Reward drops > 15%
-
 ---
 
-## 🧪 Testing
+## 🧪 Testing & Debugging
 
 ```bash
 # Run all tests
 cd Python && python -m pytest tests/ -v
 
-# Specific categories
-pytest tests/test_learning_depth.py -v     # v1.3 Learning tests
-pytest tests/test_production.py -v         # Production scenarios
+# Enable debug logging
+LOG_LEVEL=DEBUG python -m uvicorn orchestrator:app --port 8000
 ```
+
+Debug logs include:
+
+- `[BANDIT SELECT]` — Context ID, top-3 candidates, chosen action
+- `[BANDIT UPDATE]` — Context ID, action, reward, arm update count
+- `[DECISION]` — Structured decision traces in DialogueService
 
 ---
 
