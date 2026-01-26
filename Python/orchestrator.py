@@ -146,7 +146,7 @@ streaming_pipeline: Optional[StreamingPipeline] = None
 structured_logger: Optional[StructuredLogger] = None
 metrics_collector: Optional[MetricsCollector] = None
 # Routers
-from routers import dialogue, system, memory
+from routers import dialogue, system, memory, cgw
 from services.dialogue_service import DialogueService
 
 
@@ -622,6 +622,7 @@ async def clear_memory(npc_name: str):
 app.include_router(system.router)  # Includes health, status, metrics
 app.include_router(memory.router)  # Memory management
 app.include_router(dialogue.router) # Streaming endpoints
+app.include_router(cgw.router)     # CGW debug endpoints
 
 
 @app.get("/api/learning/stats")

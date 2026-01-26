@@ -41,6 +41,7 @@
 | Feature | Description |
 |---------|-------------|
 | **Symbolic State Authority** | Game world is source of truth, not the LLM |
+| **CGW Gate (v2.0)** | ThalamusGate for attention control; forced signals bypass competition |
 | **LinUCB Bandits** | Sherman-Morrison O(d²) updates with UCB exploration |
 | **World Model Prediction** | Scores 32 discrete NPCActions per state |
 | **Safety Overrides** | Hard limits in combat/trust/quest contexts |
