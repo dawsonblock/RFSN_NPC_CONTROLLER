@@ -682,6 +682,24 @@ class HybridIntentGate:
         
         # Check safety flags
         if self.block_unsafe and proposal.safety_flags:
+            # === CGW INTEGRATION: Inject forced REFUSE signal on safety violation ===
+            try:
+                from learning.cgw_integration import get_cgw_manager
+                from world_model import NPCAction
+                
+                cgw = get_cgw_manager()
+                flags_str = ",".join(f.value for f in proposal.safety_flags)
+                cgw.inject_forced(
+                    source="safety_gate",
+                    npc_action=NPCAction.REFUSE,
+                    reason=f"SAFETY_VIOLATION:{flags_str}"
+                )
+                logger.warning(f"[CGW] Injected forced REFUSE for safety flags: {flags_str}")
+            except ImportError:
+                pass  # CGW not available
+            except Exception as e:
+                logger.debug(f"CGW injection failed: {e}")
+            
             return proposal, False, f"Safety flags triggered: {proposal.safety_flags}"
         
         # Check confidence threshold
