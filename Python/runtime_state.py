@@ -47,6 +47,7 @@ class RuntimeState:
     npc_action_bandit: Optional[Any] = None
     temporal_memory: Optional[Any] = None  # TemporalMemory for anticipatory selection
     hot_config: Optional[Any] = None
+    cgw_manager: Optional[Any] = None  # CGW gate for attention control
     
     def is_healthy(self) -> bool:
         """Returns True if minimum required components are loaded"""
@@ -137,8 +138,12 @@ class Runtime:
                 observability=kwargs.get('observability', current.observability),
                 event_recorder=kwargs.get('event_recorder', current.event_recorder),
                 state_machine=kwargs.get('state_machine', current.state_machine),
+                world_model=kwargs.get('world_model', current.world_model),
+                action_scorer=kwargs.get('action_scorer', current.action_scorer),
                 npc_action_bandit=kwargs.get('npc_action_bandit', current.npc_action_bandit),
+                temporal_memory=kwargs.get('temporal_memory', current.temporal_memory),
                 hot_config=kwargs.get('hot_config', current.hot_config),
+                cgw_manager=kwargs.get('cgw_manager', current.cgw_manager),
             )
             self._state = new_state
 

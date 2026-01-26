@@ -28,6 +28,8 @@ from learning.policy_owner import get_policy_owner, AbstractContext
 from learning.state_abstraction import StateAbstractor, get_state_abstractor
 from learning.action_trace import ActionTracer
 from learning.reward_signal import RewardChannel, get_reward_channel
+# CGW Gate: Cognitive Global Workspace for attention control
+from learning.cgw_integration import get_cgw_manager, AttentionCandidate
 
 logger = logging.getLogger("orchestrator")
 
@@ -319,20 +321,50 @@ class DialogueService:
                         policy_decision = policy_owner.select_action(abstract_ctx, candidates)
                         selected_npc_action = policy_decision.action
                         
-                        # Record step in action tracer for n-step credit
-                        action_tracer.record_step(
-                            decision_id=policy_decision.decision_id,
-                            npc_id=npc_name,
-                            session_id=session_id,
-                            abstract_state_key=abstract_ctx.abstract_state_key,
-                            action_id=selected_npc_action.value
-                        )
+                        # === CGW GATE: Submit as attention candidate ===
+                        cgw_manager = get_cgw_manager()
                         
-                        _log_decision(npc_name, "POLICY_SELECT", {
-                            "decision_id": policy_decision.decision_id[:8],
-                            "action": selected_npc_action.value,
-                            "exploration": policy_decision.record.exploration
-                        })
+                        # Check for forced signals first (safety/urgency bypass)
+                        if cgw_manager.has_forced_pending():
+                            forced_action, forced_id, _ = cgw_manager.select_and_commit()
+                            if forced_action:
+                                logger.info(f"[CGW] Forced override: {forced_action.value} (slot={forced_id[:8]})")
+                                selected_npc_action = forced_action
+                                # Skip normal policy decision logging
+                                policy_decision = None
+                        else:
+                            # Submit policy decision as CGW candidate
+                            action_candidate = AttentionCandidate(
+                                decision_id=policy_decision.decision_id,
+                                npc_id=npc_name,
+                                action=selected_npc_action,
+                                score=selected_action_score.score if selected_action_score else 0.5,
+                                urgency=0.5 if current_state_snapshot.combat_active else 0.0,
+                                surprise=0.0
+                            )
+                            cgw_manager.submit_candidate(action_candidate)
+                            cgw_manager.tick()  # Run one CGW cycle
+                            
+                            _log_decision(npc_name, "CGW_GATE", {
+                                "decision_id": policy_decision.decision_id[:8],
+                                "cgw_cycle": cgw_manager.cgw.cycle_counter
+                            })
+                        
+                        # Record step in action tracer for n-step credit
+                        if policy_decision:
+                            action_tracer.record_step(
+                                decision_id=policy_decision.decision_id,
+                                npc_id=npc_name,
+                                session_id=session_id,
+                                abstract_state_key=abstract_ctx.abstract_state_key,
+                                action_id=selected_npc_action.value
+                            )
+                            
+                            _log_decision(npc_name, "POLICY_SELECT", {
+                                "decision_id": policy_decision.decision_id[:8],
+                                "action": selected_npc_action.value,
+                                "exploration": policy_decision.record.exploration
+                            })
                             
                         selected_action_score = next((s for s in action_scores if s.action == selected_npc_action), action_scores[0])
                     

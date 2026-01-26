@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: cgw-ssl-guard
+Version: 0.1.0
+Summary: Step 1 falsification infrastructure: forced attention override with structural bypass
+Requires-Python: >=3.9
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
