@@ -11,7 +11,6 @@ from world_model import StateSnapshot, NPCAction, PlayerSignal
 from learning.reward_model import RewardModel
 from learning.learning_contract import LearningUpdate, EvidenceType, WriteGateError
 from learning.mode_bandit import PhrasingMode, ModeContext
-from learning.contextual_bandit import BanditContext, ContextualBandit
 from learning.metrics_guard import MetricsGuard
 from learning.temporal_memory import TemporalMemory
 from learning import ActionMode, RewardSignals
@@ -23,12 +22,12 @@ from event_recorder import EventRecorder, EventType
 from llm_action_prompts import render_action_block
 from emotional_tone import get_emotion_manager
 from intent_extraction import IntentType, SafetyFlag, IntentExtractor
-from intent_extraction import IntentType, SafetyFlag, IntentExtractor
 from streaming_engine import RFSNState
-# New Learning Modules
-from learning.state_abstraction import StateAbstractor
+# PolicyOwner: SINGLE authoritative policy entrypoint
+from learning.policy_owner import get_policy_owner, AbstractContext
+from learning.state_abstraction import StateAbstractor, get_state_abstractor
 from learning.action_trace import ActionTracer
-from learning.reward_signal import RewardChannel
+from learning.reward_signal import RewardChannel, get_reward_channel
 
 logger = logging.getLogger("orchestrator")
 
@@ -131,10 +130,16 @@ def _map_action_to_instruction(action: NPCAction) -> str:
 # Singleton instances for state management
 conversation_managers: Dict[str, ConversationManager] = {}
 
-# Learning Components (Singleton-ish for now)
-state_abstractor = StateAbstractor()
+# Learning Components (use global singletons)
+state_abstractor = get_state_abstractor()
 action_tracer = ActionTracer(trace_length=5)
-reward_channel = RewardChannel()
+reward_channel = get_reward_channel()
+
+# Session ID generator for trace linking
+import uuid
+def _get_session_id(npc_name: str) -> str:
+    # Use a stable session ID per NPC (could be enhanced with actual session tracking)
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{npc_name}-session"))[:8]
 
 class DialogueService:
     def __init__(self, runtime: Runtime, config_watcher: Any, multi_manager: MultiNPCManager):
@@ -284,18 +289,50 @@ class DialogueService:
                         selected_npc_action = candidates[0]
                         selected_action_score = action_scores[0]
                     else:
-                        if contextual_bandit:
-                            bandit_ctx = BanditContext.from_state(
-                                mood=current_state_snapshot.emotional_state,
-                                affinity=current_state_snapshot.affinity,
-                                player_signal=player_signal,
-                                last_action=None,
-                                turn_count=len(memory.turns) if memory else 3,
-                                has_safety_flag=False
-                            )
-                            selected_npc_action = contextual_bandit.select(context=bandit_ctx, candidates=candidates, log_counterfactual=True)
-                        else:
-                            selected_npc_action = candidates[0]
+                        # === POLICY OWNER: Single authoritative policy entrypoint ===
+                        policy_owner = get_policy_owner()
+                        session_id = _get_session_id(npc_name)
+                        
+                        # Build abstract context for policy
+                        raw_state_dict = {
+                            "mood": current_state_snapshot.mood,
+                            "affinity": current_state_snapshot.affinity,
+                            "relationship": current_state_snapshot.relationship,
+                            "turn_count": len(memory.turns) if memory else 3,
+                        }
+                        
+                        abstract_ctx = AbstractContext(
+                            npc_id=npc_name,
+                            session_id=session_id,
+                            abstract_state_key=state_abstractor.abstract(raw_state_dict),
+                            raw_state_hash=state_abstractor.compute_raw_hash(raw_state_dict),
+                            mood_bucket=state_abstractor.bucket_mood(current_state_snapshot.mood),
+                            affinity_bucket=state_abstractor.bucket_affinity(current_state_snapshot.affinity or 0),
+                            player_signal=player_signal.value,
+                            last_action=None,
+                            turn_count=len(memory.turns) if memory else 3,
+                            has_safety_flag=False,
+                            prior_decision_id=policy_owner.get_last_decision_id(npc_name, session_id)
+                        )
+                        
+                        # Select action via PolicyOwner (creates DecisionRecord)
+                        policy_decision = policy_owner.select_action(abstract_ctx, candidates)
+                        selected_npc_action = policy_decision.action
+                        
+                        # Record step in action tracer for n-step credit
+                        action_tracer.record_step(
+                            decision_id=policy_decision.decision_id,
+                            npc_id=npc_name,
+                            session_id=session_id,
+                            abstract_state_key=abstract_ctx.abstract_state_key,
+                            action_id=selected_npc_action.value
+                        )
+                        
+                        _log_decision(npc_name, "POLICY_SELECT", {
+                            "decision_id": policy_decision.decision_id[:8],
+                            "action": selected_npc_action.value,
+                            "exploration": policy_decision.record.exploration
+                        })
                             
                         selected_action_score = next((s for s in action_scores if s.action == selected_npc_action), action_scores[0])
                     
@@ -487,19 +524,29 @@ class DialogueService:
             if anchor_type != "none":
                 final_reward = anchor_reward
             
-            # Record trace for delayed credit
-            if selected_npc_action and 'context_id' in locals():
+            # Record trace for delayed credit (already done during selection if using PolicyOwner)
+            # Legacy fallback for when PolicyOwner wasn't used
+            if selected_npc_action and 'context_id' in locals() and 'policy_decision' not in locals():
                 action_tracer.record_step(
-                    context_id=context_id,
-                    action=selected_npc_action.value,
-                    state_snapshot=asdict(current_state_snapshot),
-                    metadata={"reward": final_reward, "abstract_key": abstract_key}
+                    decision_id=f"legacy-{time.time_ns()}",
+                    npc_id=npc_name,
+                    session_id=_get_session_id(npc_name),
+                    abstract_state_key=abstract_key if 'abstract_key' in locals() else "unknown",
+                    action_id=selected_npc_action.value
                 )
 
-            if contextual_bandit and selected_npc_action and 'bandit_ctx' in locals():
-                contextual_bandit.update(bandit_ctx, selected_npc_action, final_reward)
-                contextual_bandit.save()
+            # === POLICY OWNER UPDATE ===
+            if 'policy_decision' in locals() and selected_npc_action:
+                policy_owner = get_policy_owner()
+                policy_owner.update(
+                    policy_decision,
+                    reward=final_reward,
+                    meta={"source": "implicit"}
+                )
+                policy_owner.save()
 
+            # Mode bandit update (separate from PolicyOwner)
             if mode_bandit and 'selected_phrasing_mode' in locals() and 'mode_ctx' in locals():
                 mode_bandit.update(mode_ctx, selected_phrasing_mode, final_reward)
                 mode_bandit.save()
+

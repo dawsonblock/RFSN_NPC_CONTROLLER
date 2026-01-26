@@ -1,0 +1,36 @@
+# State Abstraction Configuration
+# Version: 2.0
+# Schema: rfsn_state_v2
+
+version: "2.0"
+schema_id: "rfsn_state_v2"
+
+# Features used for abstract state key
+key_features:
+  - location
+  - quest_state
+  - relationship
+  - threat_level
+
+# Bucket rules for numeric values
+# Format: [low, high, label]
+bucket_rules:
+  affinity:
+    - [-1.0, -0.3, "neg"]
+    - [-0.3, 0.3, "neutral"]
+    - [0.3, 1.0, "pos"]
+  
+  threat_level:
+    - [0, 0, "none"]
+    - [1, 1, "low"]
+    - [2, 99, "high"]
+  
+  turn_count:
+    - [0, 2, "early"]
+    - [3, 6, "mid"]
+    - [7, 999, "late"]
+  
+  mood:
+    hostile: ["angry", "hostile", "aggressive", "furious", "enraged"]
+    friendly: ["happy", "friendly", "warm", "welcoming", "pleased"]
+    default: "neutral"
